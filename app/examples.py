@@ -318,7 +318,7 @@ def resolve_example(example_pattern: str, asset_type: str, objective: str) -> di
     if asset_type in {"outreach-email"}:
         if any(term in lowered for term in ("api key", "chatgpt", "claude", "gemini", "model access", "gateway")):
             return example_map()["governed-model-access"]
-        return example_map()["governed-model-access"]
+        return None
     if asset_type in {"one-pager"}:
         if "aws" in lowered or "co-sell" in lowered or "on-the-fly" in lowered:
             return example_map()["aws-cosell-one-pager"]
