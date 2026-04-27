@@ -18,14 +18,38 @@ const exampleLabel = document.getElementById("exampleLabel");
 const exampleUseWhen = document.getElementById("exampleUseWhen");
 const exampleSource = document.getElementById("exampleSource");
 const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
+const renderPanel = document.getElementById("renderPanel");
+const renderFrame = document.getElementById("renderFrame");
+const renderTitle = document.getElementById("renderTitle");
+const openPreviewButton = document.getElementById("openPreviewButton");
 
 let meta = {
   deliverable_types: [],
   example_patterns: []
 };
+let currentRenderUrl = "";
 
 function setLog(lines) {
   logBox.textContent = lines.join("\n");
+}
+
+function clearRenderPreview() {
+  if (currentRenderUrl) {
+    URL.revokeObjectURL(currentRenderUrl);
+    currentRenderUrl = "";
+  }
+  renderFrame.removeAttribute("src");
+  renderTitle.textContent = "Rendered one-pager";
+  renderPanel.classList.add("hidden");
+}
+
+function setRenderPreview(renderedHtml, renderedTitleText) {
+  clearRenderPreview();
+  const blob = new Blob([renderedHtml], { type: "text/html" });
+  currentRenderUrl = URL.createObjectURL(blob);
+  renderFrame.src = currentRenderUrl;
+  renderTitle.textContent = renderedTitleText || "Rendered one-pager";
+  renderPanel.classList.remove("hidden");
 }
 
 function currentExamples() {
@@ -137,6 +161,7 @@ form.addEventListener("submit", async (event) => {
     `prompt chars: ${promptInput.value.trim().length}`,
     "calling backend..."
   ]);
+  clearRenderPreview();
 
   const body = {
     asset_type: assetType.value,
@@ -161,6 +186,9 @@ form.addEventListener("submit", async (event) => {
     }
 
     outputBox.textContent = payload.output;
+    if (payload.rendered_html) {
+      setRenderPreview(payload.rendered_html, payload.rendered_title);
+    }
     modelName.textContent = payload.model;
     sourceDate.textContent = payload.source_last_reviewed;
     setLog([
@@ -183,6 +211,13 @@ form.addEventListener("submit", async (event) => {
     submitButton.disabled = false;
     submitButton.textContent = "Generate";
   }
+});
+
+openPreviewButton.addEventListener("click", () => {
+  if (!currentRenderUrl) {
+    return;
+  }
+  window.open(currentRenderUrl, "_blank", "noopener,noreferrer");
 });
 
 copyButton.addEventListener("click", async () => {

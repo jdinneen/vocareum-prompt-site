@@ -15,7 +15,7 @@
       <div class="hero-copy">
         <p class="eyebrow">Vocareum messaging engine</p>
         <h1>mktg agent</h1>
-        <p class="lede">Generate grounded emails and collateral from the product catalog plus the approved example patterns you already use.</p>
+        <p class="lede">Generate grounded emails and collateral from the live product catalog, the approved email doc, and the example collateral folder in Drive.</p>
       </div>
       <div class="hero-meta">
         <p class="meta-title">Live config</p>
@@ -24,7 +24,7 @@
           <span class="dot">•</span>
           <span id="sourceDate">Loading...</span>
         </p>
-        <p class="meta-note">Gemini key stays server-side. Output is constrained to the product catalog and the approved example library.</p>
+        <p class="meta-note">Gemini key stays server-side. Output is constrained to the live catalog doc plus the approved email and collateral examples in Drive.</p>
       </div>
     </section>
 
@@ -86,6 +86,17 @@
           <p id="exampleUseWhen" class="example-use">Loading...</p>
           <p id="exampleSource" class="example-source">Loading...</p>
         </article>
+
+        <section id="renderPanel" class="render-panel hidden">
+          <div class="render-panel-head">
+            <div>
+              <p class="card-label">Collateral Preview</p>
+              <h2 id="renderTitle">Rendered one-pager</h2>
+            </div>
+            <button id="openPreviewButton" type="button">Open preview</button>
+          </div>
+          <iframe id="renderFrame" title="Collateral preview"></iframe>
+        </section>
 
         <pre id="logBox">log ready</pre>
         <pre id="outputBox">Generated output appears here.</pre>

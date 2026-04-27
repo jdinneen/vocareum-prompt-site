@@ -1,3 +1,6 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 google-genai==1.30.0
+google-api-python-client==2.163.0
+google-auth-oauthlib==1.2.1
+pypdf==5.4.0

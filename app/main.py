@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from .examples import DELIVERABLE_TYPES, example_prompt_block, examples_for, resolve_example
 from .grounding import grounding_block, load_grounding, matched_products
+from .renderers import render_collateral
 
 log = logging.getLogger("vocareum_prompt_api")
 if not logging.getLogger().handlers:
@@ -59,6 +60,9 @@ class GenerateResponse(BaseModel):
     source_last_reviewed: str
     request_id: str
     duration_ms: int
+    rendered_html: str | None = None
+    rendered_kind: str | None = None
+    rendered_title: str | None = None
 
 
 def _require_api_key() -> str:
@@ -117,6 +121,8 @@ def _build_user_prompt(req: GenerateRequest) -> str:
     example = resolve_example(req.example_pattern, req.asset_type, req.objective)
     example_block = example_prompt_block(example).strip()
     format_instructions = _output_format_instructions(req)
+    example = resolve_example(req.example_pattern, req.asset_type, req.objective)
+    grounding = grounding_block(req.objective, req.asset_type, example)
     if matched_products(req.objective):
         return f"""Create a grounded Vocareum deliverable.
 
@@ -128,11 +134,11 @@ Format instructions: {format_instructions}
 
 Use the grounding below.
 
-{grounding_block(req.objective)}
+{grounding}
 
 {example_block or "No explicit example pattern selected."}
 
-Answer directly from the relevant product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Use only proof, event references, customer names, and metrics that are explicit in the grounding. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request.
+Answer directly from the relevant live product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Use only proof, event references, customer names, and metrics that are explicit in the grounding. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request.
 """
     return f"""Create a grounded Vocareum deliverable.
 
@@ -144,11 +150,11 @@ Format instructions: {format_instructions}
 
 Use the grounding below.
 
-{grounding_block(req.objective)}
+{grounding}
 
 {example_block or "No explicit example pattern selected."}
 
-Follow the example pattern when useful, but do not copy example wording. Use only grounded product truth and approved proof. If a proof point or named example is not explicit in the grounding, do not add it.
+Follow the example pattern when useful, but do not copy example wording. Use only grounded live product truth and grounded example support. If a proof point or named example is not explicit in the grounding, do not add it.
 """
 
 
@@ -304,6 +310,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
     except Exception:
         log.exception("generate_failed request_id=%s model=%s", request_id, _model_name())
         raise
+    rendered = render_collateral(req.asset_type, output)
     return GenerateResponse(
         output=output,
         model=_model_name(),
@@ -311,4 +318,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         source_last_reviewed=data["source"]["last_reviewed"],
         request_id=request_id,
         duration_ms=duration_ms,
+        rendered_html=rendered["html"] if rendered else None,
+        rendered_kind=rendered["kind"] if rendered else None,
+        rendered_title=rendered["title"] if rendered else None,
     )
