@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .examples import DELIVERABLE_TYPES, example_prompt_block, examples_for, resolve_example
 from .grounding import grounding_block, load_grounding, matched_products
 
 log = logging.getLogger("vocareum_prompt_api")
@@ -24,7 +25,7 @@ Rules:
 2. Never use information, claims, proof, numbers, customers, or product details from outside the provided product catalog grounding.
 3. If a requested claim is not supported by the product catalog grounding, say so plainly and do not invent or supplement it.
 4. Use a professional tone and complete sentences.
-5. Do not use bullets, numbered lists, headings, labels, markdown sections, or meta commentary unless explicitly requested.
+5. Do not use bullets, numbered lists, headings, labels, markdown sections, or meta commentary unless the requested asset format explicitly requires structured output.
 6. Keep output concise, concrete, and useful for real GTM and collateral work.
 7. Use approved stats and named proof carefully and only when relevant.
 8. Do not present source-specific proof as a platform-wide average.
@@ -35,16 +36,20 @@ Rules:
 
 class GenerateRequest(BaseModel):
     asset_type: Literal[
-        "website-copy",
-        "landing-page",
         "outreach-email",
-        "one-pager-outline",
-        "executive-brief",
+        "follow-up-email",
+        "capability-boundary-email",
+        "partner-email",
+        "one-pager",
+        "overview-collateral",
+        "sales-deck-brief",
+        "website-copy",
         "custom",
     ] = Field(default="custom")
     audience: str = Field(default="", max_length=200)
     objective: str = Field(..., min_length=8, max_length=1200)
     extra_constraints: str = Field(default="", max_length=1200)
+    example_pattern: str = Field(default="", max_length=120)
 
 
 class GenerateResponse(BaseModel):
@@ -71,20 +76,59 @@ def _allowed_origin() -> str:
     return os.environ.get("ALLOWED_ORIGIN", "").strip() or "*"
 
 
+def _output_format_instructions(req: GenerateRequest) -> str:
+    if req.asset_type in {"outreach-email", "follow-up-email", "capability-boundary-email", "partner-email"}:
+        return (
+            "Return a complete send-ready email. Put the subject line first as "
+            "`Subject: ...`, then a blank line, then the email body. Use normal "
+            "greeting and sign-off. Keep paragraphs short. Avoid bullets unless the "
+            "pattern clearly needs them."
+        )
+    if req.asset_type == "one-pager":
+        return (
+            "Return structured one-pager copy with these labeled sections in order: "
+            "Headline, Subhead, Stat Bar, Problem, How It Works, Who Uses This, Proof, CTA. "
+            "Use concise scan-friendly copy. Use numbered steps inside How It Works if relevant."
+        )
+    if req.asset_type == "overview-collateral":
+        return (
+            "Return structured collateral copy with these labeled sections in order: "
+            "Headline, Subhead, Core Capabilities, Best-Fit Buyers, Proof, CTA. "
+            "You may use short bullets inside capability and buyer sections."
+        )
+    if req.asset_type == "sales-deck-brief":
+        return (
+            "Return a six-slide brief labeled Slide 1 through Slide 6. For each slide, "
+            "provide a title and two to four bullets. Keep it ready for downstream deck building."
+        )
+    if req.asset_type == "website-copy":
+        return (
+            "Return structured website copy with these labeled sections in order: "
+            "Hero Headline, Hero Subhead, Proof Bar, Why It Matters, Core Capabilities, CTA."
+        )
+    return "Return grounded business-ready copy in the most useful format for the request."
+
+
 def _build_user_prompt(req: GenerateRequest) -> str:
+    example = resolve_example(req.example_pattern, req.asset_type, req.objective)
+    example_block = example_prompt_block(example).strip()
+    format_instructions = _output_format_instructions(req)
     if matched_products(req.objective):
-        return f"""Create a grounded Vocareum product answer.
+        return f"""Create a grounded Vocareum deliverable.
 
 Asset type: {req.asset_type}
 Audience: {req.audience or "Not specified"}
 Objective: {req.objective}
 Constraints: {req.extra_constraints or "None"}
+Format instructions: {format_instructions}
 
 Use the grounding below.
 
 {grounding_block(req.objective)}
 
-Answer directly from the relevant product catalog section. Use two to four concise professional paragraphs. Prioritize what the product is, how it works, core capabilities, and best-fit use cases. Do not open with generic company-wide scale stats unless they are directly necessary to answer the question.
+{example_block or "No explicit example pattern selected."}
+
+Answer directly from the relevant product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request.
 """
     return f"""Create a grounded Vocareum deliverable.
 
@@ -92,12 +136,15 @@ Asset type: {req.asset_type}
 Audience: {req.audience or "Not specified"}
 Objective: {req.objective}
 Constraints: {req.extra_constraints or "None"}
+Format instructions: {format_instructions}
 
 Use the grounding below.
 
 {grounding_block(req.objective)}
 
-Return exactly two professional paragraphs and nothing else.
+{example_block or "No explicit example pattern selected."}
+
+Follow the example pattern when useful, but do not copy example wording. Use only grounded product truth and approved proof.
 """
 
 
@@ -160,10 +207,13 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     start = time.perf_counter()
     model = _model_name()
     prompt = _build_user_prompt(req)
+    example = resolve_example(req.example_pattern, req.asset_type, req.objective)
     log.info(
-        "generate_start request_id=%s model=%s objective_chars=%s",
+        "generate_start request_id=%s model=%s asset_type=%s example=%s objective_chars=%s",
         request_id,
         model,
+        req.asset_type,
+        example["id"] if example else "none",
         len(req.objective),
     )
     client = genai.Client(api_key=_require_api_key())
@@ -177,17 +227,20 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         ),
     )
     raw_text = (response.text or "").strip()
-    if matched_products(req.objective):
+    if matched_products(req.objective) and req.asset_type == "custom":
         text = _normalize_product_answer(raw_text)
-    else:
+    elif req.asset_type == "custom":
         text = _force_two_paragraphs(raw_text)
+    else:
+        text = raw_text
     if not text:
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
     duration_ms = round((time.perf_counter() - start) * 1000)
     log.info(
-        "generate_done request_id=%s model=%s duration_ms=%s output_chars=%s",
+        "generate_done request_id=%s model=%s asset_type=%s duration_ms=%s output_chars=%s",
         request_id,
         model,
+        req.asset_type,
         duration_ms,
         len(text),
     )
@@ -223,6 +276,18 @@ def meta() -> dict:
         "source": data["source"],
         "public_stats": data["public_stats"],
         "style_palette": data["style_palette"],
+        "deliverable_types": DELIVERABLE_TYPES,
+        "example_patterns": [
+            {
+                "id": item["id"],
+                "label": item["label"],
+                "group": item["group"],
+                "asset_types": item["asset_types"],
+                "use_when": item["use_when"],
+                "source": item["source"],
+            }
+            for item in examples_for("custom")
+        ],
     }
 
 

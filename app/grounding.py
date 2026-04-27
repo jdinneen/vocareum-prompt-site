@@ -84,13 +84,9 @@ def product_grounding_block(user_text: str) -> str:
 def general_grounding_block() -> str:
     data = load_grounding()
     public_stats = "\n".join(f"- {item}" for item in data["public_stats"])
-    icp_verticals = "\n".join(
-        f"- {item['name']}: {', '.join(item['examples'])}"
-        for item in data["icp_verticals"]
-    )
-    audience_doors = "\n".join(
-        f"- {item['name']}: {item['positioning']}"
-        for item in data["audience_doors"]
+    audience_segments = "\n".join(
+        f"- {item['name']} ({', '.join(item['examples'])}): {item['positioning']}"
+        for item in data["audience_segments"]
     )
     products = "\n".join(
         f"- {item['name']}: {item['summary']}"
@@ -110,8 +106,7 @@ Public stats:
 {public_stats}
 
 Audience segments:
-{icp_verticals}
-{audience_doors}
+{audience_segments}
 
 Core product surfaces:
 {products}

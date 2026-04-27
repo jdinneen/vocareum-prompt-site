@@ -5,7 +5,8 @@
   --coral: #ff7f50;
   --gray: #efefef;
   --white: #ffffff;
-  --black: #000000;
+  --paper: #f7f4ee;
+  --ink: #111111;
 }
 
 * {
@@ -14,26 +15,129 @@
 
 body {
   margin: 0;
-  color: var(--black);
+  color: var(--ink);
   font-family: "Manrope", sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(193, 211, 221, 0.75), transparent 28%),
-    linear-gradient(180deg, #f6f8f9 0%, #edf1f2 100%);
+    radial-gradient(circle at top left, rgba(255, 127, 80, 0.14), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(193, 211, 221, 0.9), transparent 28%),
+    linear-gradient(180deg, #fbfaf7 0%, #f2efe8 100%);
 }
 
 .page-shell {
-  width: min(980px, calc(100vw - 32px));
+  width: min(1280px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 28px 0 40px;
 }
 
-.panel {
+.hero-panel,
+.control-panel,
+.output-panel {
   border: 1px solid rgba(46, 58, 65, 0.12);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 24px 70px rgba(46, 58, 65, 0.08);
   backdrop-filter: blur(12px);
-  box-shadow: 0 18px 50px rgba(46, 58, 65, 0.08);
-  padding: 24px;
+}
+
+.hero-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr);
+  gap: 18px;
+  padding: 28px;
+  border-radius: 28px;
+  margin-bottom: 18px;
+}
+
+.eyebrow,
+.card-label,
+.meta-title,
+label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.eyebrow,
+.meta-title,
+.card-label,
+label {
+  color: var(--steel);
+}
+
+.hero-copy h1 {
+  margin: 8px 0 10px;
+  font-size: clamp(2.8rem, 7vw, 5.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.07em;
+  color: var(--slate);
+}
+
+.lede {
+  max-width: 700px;
+  margin: 0;
+  color: var(--steel);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.hero-meta {
+  padding: 18px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(46, 58, 65, 0.98) 0%, rgba(68, 86, 100, 0.96) 100%);
+  color: var(--white);
+}
+
+.meta-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 12px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9rem;
+}
+
+.meta-title,
+.meta-note {
+  color: #d9e3e8;
+}
+
+.meta-note {
+  margin: 0;
+  line-height: 1.55;
+  font-size: 0.94rem;
+}
+
+.dot {
+  color: var(--coral);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr);
+  gap: 18px;
+}
+
+.control-panel,
+.output-panel {
+  border-radius: 24px;
+  padding: 22px;
+}
+
+.control-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-content: start;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
 }
 
 input,
@@ -44,73 +148,42 @@ button {
   font: inherit;
 }
 
+input,
+select,
 textarea {
-  border: 1px solid rgba(68, 86, 100, 0.2);
+  border: 1px solid rgba(68, 86, 100, 0.22);
   border-radius: 16px;
   padding: 14px 16px;
-  background: var(--white);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 textarea {
   resize: vertical;
-  line-height: 1.5;
-}
-
-.simple-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.topbar h1 {
-  margin: 0;
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  line-height: 1;
-  letter-spacing: -0.06em;
-}
-
-.subline,
-.meta-line {
-  margin: 0;
-  color: var(--steel);
-}
-
-.meta-line {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.92rem;
-}
-
-.dot {
-  color: var(--coral);
-}
-
-.prompt-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-#logBox {
-  min-height: 92px;
-  margin: 0;
-  border-radius: 14px;
-  padding: 12px 14px;
-  background: #eef2f3;
-  color: var(--steel);
-  font-family: "Fira Code", monospace;
-  font-size: 0.8rem;
   line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+}
+
+.preset-strip {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.preset-button {
+  width: auto;
+  border-radius: 999px;
+  border: 1px solid rgba(68, 86, 100, 0.18);
+  background: rgba(239, 239, 239, 0.8);
+  color: var(--slate);
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
+.action-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
 }
 
 button {
@@ -119,20 +192,19 @@ button {
   padding: 14px 18px;
   font-weight: 800;
   cursor: pointer;
-  transition: transform 120ms ease, opacity 120ms ease;
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
 }
 
 #submitButton {
+  max-width: 220px;
   background: var(--slate);
   color: var(--white);
-  max-width: 180px;
 }
 
 #copyButton {
-  width: auto;
+  max-width: 180px;
   background: var(--gray);
   color: var(--slate);
-  padding-inline: 16px;
 }
 
 button:hover {
@@ -141,31 +213,110 @@ button:hover {
 
 button:disabled {
   cursor: wait;
-  opacity: 0.7;
+  opacity: 0.72;
   transform: none;
 }
 
+.output-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.example-card {
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(255, 127, 80, 0.12) 0%, rgba(193, 211, 221, 0.48) 100%);
+  padding: 16px 18px;
+}
+
+.example-card h2 {
+  margin: 6px 0 8px;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--slate);
+}
+
+.example-use,
+.example-source {
+  margin: 0;
+  color: var(--steel);
+  line-height: 1.5;
+}
+
+.example-source {
+  margin-top: 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+}
+
+#logBox,
 #outputBox {
-  min-height: 420px;
   margin: 0;
   border-radius: 18px;
-  padding: 18px;
-  background: linear-gradient(180deg, #243039 0%, #2e3a41 100%);
-  color: #f4f8fa;
-  font-family: "Fira Code", monospace;
-  font-size: 0.92rem;
-  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 960px) {
-  .topbar {
-    align-items: flex-start;
+#logBox {
+  min-height: 128px;
+  padding: 14px 16px;
+  background: #eef2f3;
+  color: var(--steel);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+#outputBox {
+  min-height: 540px;
+  padding: 18px;
+  background: linear-gradient(180deg, #1e2a31 0%, #2e3a41 100%);
+  color: #f3f7f8;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 1080px) {
+  .workspace,
+  .hero-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-shell {
+    width: min(100vw - 20px, 100%);
+    padding-top: 18px;
+  }
+
+  .hero-panel,
+  .control-panel,
+  .output-panel {
+    border-radius: 20px;
+    padding: 18px;
+  }
+
+  .control-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .field-wide,
+  .preset-strip,
+  .action-row {
+    grid-column: auto;
+  }
+
+  .action-row {
     flex-direction: column;
   }
 
+  #submitButton,
+  #copyButton {
+    max-width: none;
+  }
+
   #outputBox {
-    min-height: 360px;
+    min-height: 420px;
   }
 }

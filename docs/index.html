@@ -6,34 +6,90 @@
   <title>mktg agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <main class="page-shell">
-    <section class="panel simple-shell">
-      <div class="topbar">
+    <section class="hero-panel">
+      <div class="hero-copy">
+        <p class="eyebrow">Vocareum messaging engine</p>
         <h1>mktg agent</h1>
-        <button id="copyButton" type="button">Copy</button>
+        <p class="lede">Generate grounded emails and collateral from the product catalog plus the approved example patterns you already use.</p>
       </div>
-      <p class="subline">Grounded in the Vocareum Product & Feature Catalog. Key stays server-side.</p>
-      <p class="meta-line">
-        <span id="modelName">Loading...</span>
-        <span class="dot">•</span>
-        <span id="sourceDate">Loading...</span>
-      </p>
-      <form id="promptForm" class="prompt-form">
-        <textarea
-          id="promptInput"
-          name="promptInput"
-          rows="10"
-          placeholder="Type what you want. Example: Write homepage copy for Agentic AI Labs for technology platform buyers. Keep it direct and use only grounded proof."
-          required
-        ></textarea>
-        <button id="submitButton" type="submit">Execute</button>
+      <div class="hero-meta">
+        <p class="meta-title">Live config</p>
+        <p class="meta-line">
+          <span id="modelName">Loading...</span>
+          <span class="dot">•</span>
+          <span id="sourceDate">Loading...</span>
+        </p>
+        <p class="meta-note">Gemini key stays server-side. Output is constrained to the product catalog and the approved example library.</p>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <form id="promptForm" class="control-panel">
+        <div class="field">
+          <label for="assetType">Deliverable</label>
+          <select id="assetType" name="assetType"></select>
+        </div>
+
+        <div class="field">
+          <label for="examplePattern">Example pattern</label>
+          <select id="examplePattern" name="examplePattern"></select>
+        </div>
+
+        <div class="field">
+          <label for="audienceInput">Audience</label>
+          <input id="audienceInput" name="audienceInput" type="text" placeholder="Example: AWS partner enablement buyers">
+        </div>
+
+        <div class="field field-wide">
+          <label for="promptInput">Objective</label>
+          <textarea
+            id="promptInput"
+            name="promptInput"
+            rows="9"
+            placeholder="Example: Write an AWS-focused one-pager for On-the-Fly Labs aimed at solutions architects running customer workshops. Keep it direct and only use grounded proof."
+            required
+          ></textarea>
+        </div>
+
+        <div class="field field-wide">
+          <label for="constraintsInput">Constraints</label>
+          <textarea
+            id="constraintsInput"
+            name="constraintsInput"
+            rows="4"
+            placeholder="Example: Emphasize governance and cost control. Keep the CTA to a workshop or follow-up meeting. Avoid academic framing."
+          ></textarea>
+        </div>
+
+        <div class="preset-strip">
+          <button class="preset-button" type="button" data-asset-type="outreach-email" data-example-pattern="governed-model-access" data-prompt="Write an email to a university buyer asking whether Vocareum can provide governed model access for students." data-constraints="Keep it concise. Clarify the boundary around consumer logins.">Governed access email</button>
+          <button class="preset-button" type="button" data-asset-type="follow-up-email" data-example-pattern="post-event-follow-up" data-prompt="Write a post-event follow-up email after meeting a strategic technology-platform contact at ASU+GSV." data-constraints="Reference a real follow-up session and ask for a 30-minute meeting next week.">Post-event follow-up</button>
+          <button class="preset-button" type="button" data-asset-type="one-pager" data-example-pattern="aws-cosell-one-pager" data-prompt="Write one-pager copy for On-the-Fly Labs for AWS solutions architects running customer workshops." data-constraints="Use grounded AWS proof and keep the sections scan-friendly.">AWS one-pager</button>
+          <button class="preset-button" type="button" data-asset-type="sales-deck-brief" data-example-pattern="sales-collateral" data-prompt="Create a sales deck brief for Agentic AI Labs aimed at technology platform buyers." data-constraints="Six slides. Focus on real environments, governance, and best-fit use cases.">Deck brief</button>
+        </div>
+
+        <div class="action-row">
+          <button id="submitButton" type="submit">Generate</button>
+          <button id="copyButton" type="button">Copy output</button>
+        </div>
       </form>
-      <pre id="logBox">log ready</pre>
-      <pre id="outputBox">Output appears here.</pre>
+
+      <section class="output-panel">
+        <article class="example-card">
+          <p class="card-label">Selected pattern</p>
+          <h2 id="exampleLabel">Loading...</h2>
+          <p id="exampleUseWhen" class="example-use">Loading...</p>
+          <p id="exampleSource" class="example-source">Loading...</p>
+        </article>
+
+        <pre id="logBox">log ready</pre>
+        <pre id="outputBox">Generated output appears here.</pre>
+      </section>
     </section>
   </main>
 
