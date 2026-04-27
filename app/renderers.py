@@ -24,9 +24,9 @@ def _normalize_line_breaks(text: str) -> str:
 def _extract_labeled_sections(text: str, labels: list[str]) -> dict[str, str]:
     cleaned = _normalize_line_breaks(text)
     pattern = re.compile(
-        r"(?ms)^(" + "|".join(re.escape(label) for label in labels) + r"):\s*(.*?)\s*(?=^(?:"
+        r"(?ms)^(?:[#>*\-\s]*)?(?:\*\*)?(" + "|".join(re.escape(label) for label in labels) + r")(?:\*\*)?:\s*(.*?)\s*(?=^(?:[#>*\-\s]*)?(?:\*\*)?(?:"
         + "|".join(re.escape(label) for label in labels)
-        + r"):\s*|\Z)"
+        + r")(?:\*\*)?:\s*|\Z)"
     )
     sections: dict[str, str] = {}
     for match in pattern.finditer(cleaned):
@@ -35,7 +35,13 @@ def _extract_labeled_sections(text: str, labels: list[str]) -> dict[str, str]:
 
 
 def _split_stat_bar(text: str) -> list[dict[str, str]]:
-    raw_parts = [part.strip(" .") for part in re.split(r"\s*(?:;|\|)\s*", text) if part.strip()]
+    normalized = _normalize_line_breaks(text)
+    normalized = re.sub(r"(?m)^\s*[-*]\s*", "", normalized)
+    raw_parts = [
+        part.strip(" .")
+        for part in re.split(r"\s*(?:;|\||\n)\s*", normalized)
+        if part.strip()
+    ]
     items: list[dict[str, str]] = []
     for part in raw_parts[:4]:
         value = part

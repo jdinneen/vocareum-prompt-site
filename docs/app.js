@@ -188,18 +188,31 @@ form.addEventListener("submit", async (event) => {
     outputBox.textContent = payload.output;
     if (payload.rendered_html) {
       setRenderPreview(payload.rendered_html, payload.rendered_title);
+    } else if (assetType.value === "one-pager") {
+      setLog([
+        "request complete",
+        `request id: ${payload.request_id}`,
+        `asset type: ${assetType.value}`,
+        `example pattern: ${examplePattern.value || "auto"}`,
+        `model: ${payload.model}`,
+        `server duration: ${payload.duration_ms} ms`,
+        `browser total: ${Math.round(performance.now() - startedAt)} ms`,
+        "preview note: renderer could not parse the one-pager sections"
+      ]);
     }
     modelName.textContent = payload.model;
     sourceDate.textContent = payload.source_last_reviewed;
-    setLog([
-      "request complete",
-      `request id: ${payload.request_id}`,
-      `asset type: ${assetType.value}`,
-      `example pattern: ${examplePattern.value || "auto"}`,
-      `model: ${payload.model}`,
-      `server duration: ${payload.duration_ms} ms`,
-      `browser total: ${Math.round(performance.now() - startedAt)} ms`
-    ]);
+    if (!(assetType.value === "one-pager" && !payload.rendered_html)) {
+      setLog([
+        "request complete",
+        `request id: ${payload.request_id}`,
+        `asset type: ${assetType.value}`,
+        `example pattern: ${examplePattern.value || "auto"}`,
+        `model: ${payload.model}`,
+        `server duration: ${payload.duration_ms} ms`,
+        `browser total: ${Math.round(performance.now() - startedAt)} ms`
+      ]);
+    }
   } catch (error) {
     outputBox.textContent = `Error: ${error.message}`;
     setLog([
