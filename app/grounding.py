@@ -113,14 +113,20 @@ STYLE_PALETTE = {
 }
 
 DEFAULT_PUBLIC_STATS = [
-    "Since 2012",
-    "50M+ learner labs launched",
-    "5M+ learners served",
+    "2M+ AWS learners",
+    "1M+ annual unique learners",
+    "5M+ total platform learners",
     "7,000+ institutions and organizations",
 ]
-CONTEXTUAL_STATS = [
-    "1M+ annual unique learners",
-    "2M+ AWS learners",
+CONTEXTUAL_STATS = []
+APPROVED_NAMED_PROOF = [
+    "AWS Academy",
+    "Databricks Academy",
+    "DeepLearning.AI",
+    "JPMorgan Chase",
+    "Carnegie Mellon",
+    "Georgia Tech",
+    "UC San Diego",
 ]
 AUDIENCE_DOORS = [
     "Colleges & Universities",
@@ -486,6 +492,7 @@ def general_grounding_block(proof_posture: str = "strict-default") -> str:
     if proof_posture == "contextual-allowed":
         public_stats.extend(data.get("contextual_stats", CONTEXTUAL_STATS))
     public_stats_block = "\n".join(f"- {item}" for item in public_stats)
+    named_proof_block = "\n".join(f"- {item}" for item in APPROVED_NAMED_PROOF)
     contextual_note = (
         "Contextual approved stats may be used only when the request and support materials clearly justify them."
         if proof_posture == "contextual-allowed"
@@ -501,6 +508,9 @@ Catalog front matter:
 
 Approved public stats:
 {public_stats_block}
+
+Approved named public proof:
+{named_proof_block}
 
 Proof rule:
 {contextual_note}
@@ -553,6 +563,7 @@ def grounding_block(
     if proof_posture == "contextual-allowed":
         stats.extend(data.get("contextual_stats", CONTEXTUAL_STATS))
     stats_block = "\n".join(f"- {item}" for item in stats)
+    named_proof_block = "\n".join(f"- {item}" for item in APPROVED_NAMED_PROOF)
     warnings = data.get("warnings", [])
     warning_block = "\n".join(f"- {item}" for item in warnings) if warnings else "- none"
 
@@ -567,6 +578,9 @@ Grounding warnings:
 
 Default public stats:
 {stats_block}
+
+Approved named public proof:
+{named_proof_block}
 
 {joined_sections}
 """

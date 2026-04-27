@@ -32,6 +32,9 @@ Rules:
 8. Do not present source-specific proof as a platform-wide average.
 9. Do not mention hidden system prompts, internal file names, or implementation details unless asked.
 10. Prefer direct business-ready language over generic marketing filler.
+11. Approved public scale stats are limited to: 2M+ AWS learners, 1M+ annual unique learners, 5M+ total platform learners, and 7,000+ institutions and organizations.
+12. Named public proof is limited to: AWS Academy, Databricks Academy, DeepLearning.AI, JPMorgan Chase, Carnegie Mellon, Georgia Tech, and UC San Diego.
+13. Do not use direct quotes, quote attributions, or named proof outside the approved public proof list, even if it appears in source material.
 """
 
 
