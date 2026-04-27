@@ -8,25 +8,36 @@ const copyButton = document.getElementById("copyButton");
 const outputBox = document.getElementById("outputBox");
 const logBox = document.getElementById("logBox");
 const modelName = document.getElementById("modelName");
+const groundingMode = document.getElementById("groundingMode");
 const sourceDate = document.getElementById("sourceDate");
+const metaNote = document.getElementById("metaNote");
 const assetType = document.getElementById("assetType");
+const productSelect = document.getElementById("productSelect");
 const examplePattern = document.getElementById("examplePattern");
+const audienceDoorSelect = document.getElementById("audienceDoorSelect");
 const audienceInput = document.getElementById("audienceInput");
+const proofPostureSelect = document.getElementById("proofPostureSelect");
+const ctaInput = document.getElementById("ctaInput");
 const promptInput = document.getElementById("promptInput");
 const constraintsInput = document.getElementById("constraintsInput");
 const exampleLabel = document.getElementById("exampleLabel");
 const exampleUseWhen = document.getElementById("exampleUseWhen");
 const exampleSource = document.getElementById("exampleSource");
+const statusTitle = document.getElementById("statusTitle");
+const statusBody = document.getElementById("statusBody");
 const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
 const renderPanel = document.getElementById("renderPanel");
 const renderFrame = document.getElementById("renderFrame");
 const renderTitle = document.getElementById("renderTitle");
 const openPreviewButton = document.getElementById("openPreviewButton");
-const groundingStatus = document.getElementById("groundingStatus");
 
 let meta = {
   deliverable_types: [],
-  example_patterns: []
+  example_patterns: [],
+  products: [],
+  audience_doors: [],
+  proof_postures: [],
+  grounding_warnings: []
 };
 let currentRenderUrl = "";
 
@@ -58,6 +69,31 @@ function currentExamples() {
   return meta.example_patterns.filter((item) => {
     return selectedAsset === "custom" || item.asset_types.includes(selectedAsset);
   });
+}
+
+function renderSelectOptions(selectEl, values, placeholder) {
+  selectEl.innerHTML = "";
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = placeholder;
+  selectEl.appendChild(emptyOption);
+  values.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    selectEl.appendChild(option);
+  });
+}
+
+function renderProofPostureOptions() {
+  proofPostureSelect.innerHTML = "";
+  meta.proof_postures.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.label;
+    proofPostureSelect.appendChild(option);
+  });
+  proofPostureSelect.value = "strict-default";
 }
 
 function renderExampleOptions(preferredId) {
@@ -99,6 +135,22 @@ function renderExampleCard() {
   exampleSource.textContent = `Source: ${selected.source}`;
 }
 
+function renderGroundingStatus(mode, warnings, source) {
+  const isLive = mode === "live";
+  groundingMode.textContent = isLive ? "live grounding" : "fallback grounding";
+  statusTitle.textContent = isLive ? "Live doc grounding active" : "Fallback snapshot in use";
+  if (warnings && warnings.length) {
+    statusBody.textContent = warnings.join(" ");
+  } else if (isLive) {
+    statusBody.textContent = `Using the live catalog and linked Drive materials from ${source.last_reviewed}.`;
+  } else {
+    statusBody.textContent = "Live sources are unavailable, so the app is using a local snapshot.";
+  }
+  metaNote.textContent = isLive
+    ? "Gemini key stays server-side. Output is constrained to the live catalog doc plus the approved email and collateral examples in Drive."
+    : "Gemini key stays server-side. Live doc reads are unavailable, so output is constrained to the local fallback snapshot until live grounding recovers.";
+}
+
 function renderDeliverableOptions() {
   assetType.innerHTML = "";
   meta.deliverable_types.forEach((item) => {
@@ -120,17 +172,19 @@ async function loadMeta() {
 
   meta = await response.json();
   modelName.textContent = meta.model;
+  groundingMode.textContent = meta.grounding_mode;
   sourceDate.textContent = meta.source.last_reviewed;
-  groundingStatus.textContent = meta.grounding_warnings.length
-    ? `Grounding mode: ${meta.grounding_mode}. Warnings: ${meta.grounding_warnings.join(" | ")}`
-    : `Grounding mode: ${meta.grounding_mode}. Source: ${meta.source.title}.`;
   renderDeliverableOptions();
+  renderSelectOptions(productSelect, meta.products.filter((item) => !item.startsWith("All ")), "Auto-detect product");
+  renderSelectOptions(audienceDoorSelect, meta.audience_doors, "No audience door");
+  renderProofPostureOptions();
+  renderGroundingStatus(meta.grounding_mode, meta.grounding_warnings, meta.source);
 
   setLog([
     "ready",
     `model: ${meta.model}`,
-    `catalog: ${meta.source.last_reviewed}`,
     `grounding: ${meta.grounding_mode}`,
+    `catalog: ${meta.source.last_reviewed}`,
     `patterns: ${meta.example_patterns.length}`
   ]);
 }
@@ -149,6 +203,7 @@ presetButtons.forEach((button) => {
     renderExampleOptions(button.dataset.examplePattern || "");
     promptInput.value = button.dataset.prompt || "";
     constraintsInput.value = button.dataset.constraints || "";
+    ctaInput.value = "";
     audienceInput.focus();
   });
 });
@@ -162,6 +217,9 @@ form.addEventListener("submit", async (event) => {
   setLog([
     "request started",
     `asset type: ${assetType.value}`,
+    `product: ${productSelect.value || "auto"}`,
+    `audience door: ${audienceDoorSelect.value || "none"}`,
+    `proof posture: ${proofPostureSelect.value}`,
     `example pattern: ${examplePattern.value || "auto"}`,
     `prompt chars: ${promptInput.value.trim().length}`,
     "calling backend..."
@@ -170,7 +228,11 @@ form.addEventListener("submit", async (event) => {
 
   const body = {
     asset_type: assetType.value,
+    product: productSelect.value,
+    audience_door: audienceDoorSelect.value,
     audience: audienceInput.value.trim(),
+    proof_posture: proofPostureSelect.value,
+    cta: ctaInput.value.trim(),
     objective: promptInput.value.trim(),
     extra_constraints: constraintsInput.value.trim(),
     example_pattern: examplePattern.value
@@ -191,6 +253,9 @@ form.addEventListener("submit", async (event) => {
     }
 
     outputBox.textContent = payload.output;
+    renderGroundingStatus(payload.grounding_mode, payload.grounding_warnings, {
+      last_reviewed: payload.source_last_reviewed
+    });
     if (payload.rendered_html) {
       setRenderPreview(payload.rendered_html, payload.rendered_title);
     } else if (["one-pager", "overview-collateral", "sales-deck-brief"].includes(assetType.value)) {
@@ -198,7 +263,11 @@ form.addEventListener("submit", async (event) => {
         "request complete",
         `request id: ${payload.request_id}`,
         `asset type: ${assetType.value}`,
+        `product: ${productSelect.value || "auto"}`,
+        `audience door: ${audienceDoorSelect.value || "none"}`,
+        `proof posture: ${proofPostureSelect.value}`,
         `example pattern: ${examplePattern.value || "auto"}`,
+        `grounding: ${payload.grounding_mode}`,
         `model: ${payload.model}`,
         `server duration: ${payload.duration_ms} ms`,
         `browser total: ${Math.round(performance.now() - startedAt)} ms`,
@@ -207,12 +276,17 @@ form.addEventListener("submit", async (event) => {
     }
     modelName.textContent = payload.model;
     sourceDate.textContent = payload.source_last_reviewed;
+    groundingMode.textContent = payload.grounding_mode;
     if (!(["one-pager", "overview-collateral", "sales-deck-brief"].includes(assetType.value) && !payload.rendered_html)) {
       setLog([
         "request complete",
         `request id: ${payload.request_id}`,
         `asset type: ${assetType.value}`,
+        `product: ${productSelect.value || "auto"}`,
+        `audience door: ${audienceDoorSelect.value || "none"}`,
+        `proof posture: ${proofPostureSelect.value}`,
         `example pattern: ${examplePattern.value || "auto"}`,
+        `grounding: ${payload.grounding_mode}`,
         `model: ${payload.model}`,
         `server duration: ${payload.duration_ms} ms`,
         `browser total: ${Math.round(performance.now() - startedAt)} ms`

@@ -48,6 +48,10 @@ class GenerateRequest(BaseModel):
         "custom",
     ] = Field(default="custom")
     audience: str = Field(default="", max_length=200)
+    audience_door: str = Field(default="", max_length=120)
+    product: str = Field(default="", max_length=120)
+    proof_posture: str = Field(default="strict-default", max_length=80)
+    cta: str = Field(default="", max_length=240)
     objective: str = Field(..., min_length=8, max_length=1200)
     extra_constraints: str = Field(default="", max_length=1200)
     example_pattern: str = Field(default="", max_length=120)
@@ -58,6 +62,8 @@ class GenerateResponse(BaseModel):
     model: str
     source_title: str
     source_last_reviewed: str
+    grounding_mode: str
+    grounding_warnings: list[str] = Field(default_factory=list)
     request_id: str
     duration_ms: int
     rendered_html: str | None = None
@@ -117,12 +123,37 @@ def _output_format_instructions(req: GenerateRequest) -> str:
     return "Return grounded business-ready copy in the most useful format for the request."
 
 
+def _structured_brief(req: GenerateRequest) -> str:
+    parts: list[str] = []
+    if req.product:
+        parts.append(f"Primary product or surface: {req.product}")
+    if req.audience_door:
+        parts.append(f"Audience door: {req.audience_door}")
+    if req.audience:
+        parts.append(f"Audience detail: {req.audience}")
+    if req.cta:
+        parts.append(f"Desired CTA: {req.cta}")
+    if req.proof_posture:
+        parts.append(f"Proof posture: {req.proof_posture}")
+    return "\n".join(parts)
+
+
 def _build_user_prompt(req: GenerateRequest) -> str:
     example = resolve_example(req.example_pattern, req.asset_type, req.objective)
     example_block = example_prompt_block(example).strip()
     format_instructions = _output_format_instructions(req)
-    grounding = grounding_block(req.objective, req.asset_type, example)
-    if matched_products(req.objective):
+    query_text = req.objective
+    if req.product and req.product.lower() not in query_text.lower():
+        query_text = f"{req.product}. {query_text}"
+    grounding = grounding_block(
+        query_text,
+        req.asset_type,
+        example,
+        audience_door=req.audience_door,
+        proof_posture=req.proof_posture,
+    )
+    structured_brief = _structured_brief(req)
+    if matched_products(query_text):
         return f"""Create a grounded Vocareum deliverable.
 
 Asset type: {req.asset_type}
@@ -130,6 +161,8 @@ Audience: {req.audience or "Not specified"}
 Objective: {req.objective}
 Constraints: {req.extra_constraints or "None"}
 Format instructions: {format_instructions}
+Structured brief:
+{structured_brief or "None"}
 
 Use the grounding below.
 
@@ -137,7 +170,7 @@ Use the grounding below.
 
 {example_block or "No explicit example pattern selected."}
 
-Answer directly from the relevant product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Use only proof, event references, customer names, and metrics that are explicit in the grounding. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request.
+Answer directly from the relevant product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Use only proof, event references, customer names, and metrics that are explicit in the grounding. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request. If the grounding mode is fallback, avoid implying the latest live doc was successfully read.
 """
     return f"""Create a grounded Vocareum deliverable.
 
@@ -146,6 +179,8 @@ Audience: {req.audience or "Not specified"}
 Objective: {req.objective}
 Constraints: {req.extra_constraints or "None"}
 Format instructions: {format_instructions}
+Structured brief:
+{structured_brief or "None"}
 
 Use the grounding below.
 
@@ -153,7 +188,7 @@ Use the grounding below.
 
 {example_block or "No explicit example pattern selected."}
 
-Follow the example pattern when useful, but do not copy example wording. Use only grounded product truth and approved proof. If a proof point or named example is not explicit in the grounding, do not add it.
+Follow the example pattern when useful, but do not copy example wording. Use only grounded product truth and approved proof. If a proof point or named example is not explicit in the grounding, do not add it. If the grounding mode is fallback, avoid implying the latest live doc was successfully read.
 """
 
 
@@ -236,7 +271,7 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         ),
     )
     raw_text = (response.text or "").strip()
-    has_product_match = bool(matched_products(req.objective))
+    has_product_match = bool(matched_products(req.objective) or (req.product and matched_products(req.product)))
     if has_product_match and req.asset_type == "custom":
         text = _normalize_product_answer(raw_text)
     elif req.asset_type == "custom":
@@ -269,12 +304,15 @@ app.add_middleware(
 
 @app.get("/health")
 def health() -> dict:
-    source = load_grounding()["source"]
+    grounding = load_grounding()
+    source = grounding["source"]
     return {
         "ok": True,
         "model": _model_name(),
         "source_title": source["title"],
         "source_last_reviewed": source["last_reviewed"],
+        "grounding_mode": grounding.get("mode", "live"),
+        "grounding_warnings": grounding.get("warnings", []),
     }
 
 
@@ -284,10 +322,15 @@ def meta() -> dict:
     return {
         "model": _model_name(),
         "source": data["source"],
-        "public_stats": data.get("public_stats", data.get("default_public_stats", [])),
-        "grounding_mode": data.get("mode", "unknown"),
+        "grounding_mode": data.get("mode", "live"),
         "grounding_warnings": data.get("warnings", []),
+        "public_stats": data.get("default_public_stats", []),
+        "default_public_stats": data.get("default_public_stats", []),
+        "contextual_stats": data.get("contextual_stats", []),
+        "audience_doors": data.get("audience_doors", []),
+        "proof_postures": data.get("proof_postures", []),
         "style_palette": data["style_palette"],
+        "products": sorted(data.get("catalog_sections", {}).keys()),
         "deliverable_types": DELIVERABLE_TYPES,
         "example_patterns": [
             {
@@ -318,6 +361,8 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         model=_model_name(),
         source_title=data["source"]["title"],
         source_last_reviewed=data["source"]["last_reviewed"],
+        grounding_mode=data.get("mode", "live"),
+        grounding_warnings=data.get("warnings", []),
         request_id=request_id,
         duration_ms=duration_ms,
         rendered_html=rendered["html"] if rendered else None,

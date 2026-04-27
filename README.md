@@ -8,14 +8,19 @@ One-page prompt site with:
 - live grounding from the governed Vocareum Product & Feature Catalog Google Doc
 - live approved email examples from a separate Google Doc
 - live collateral examples from a Google Drive folder
+- explicit `live` vs `fallback` grounding status
+- structured GTM inputs for product, audience door, proof posture, and CTA
+- experimental collateral previews for one-pagers, overview collateral, and deck briefs when the generated structure is parseable
 
 ## Architecture
 
 - `docs/`: static frontend served by GitHub Pages
 - `app/`: FastAPI backend served by Cloud Run
 - `app/grounding.py`: loads live Google Drive / Google Doc grounding and example material
+- `app/renderers.py`: turns parseable collateral outputs into lightweight HTML previews
 - `app/data/grounding_snapshot.json`: local fallback if live reads fail
 - `app/data/product_catalog_v1.1.md`: local fallback catalog snapshot
+- `tests/`: prompt-site-local tests
 
 ## Environment
 
@@ -36,6 +41,13 @@ The hosted Cloud Run service account needs read access to:
 - the collateral folder and the example files inside it
 
 The Cloud Run project also needs `drive.googleapis.com` enabled.
+
+## Product Notes
+
+- The app surfaces grounding mode so users can see whether it is reading live Drive sources or a fallback snapshot.
+- Default public stats and contextual approved stats are handled separately.
+- Collateral retrieval is ranked from the Drive folder using the request, selected product, selected audience door, and example pattern.
+- Collateral previews are intentionally marked experimental; if the generated structure is not parseable, the preview is suppressed and the raw text remains the source of truth.
 
 ## Local Run
 

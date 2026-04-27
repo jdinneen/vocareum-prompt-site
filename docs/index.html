@@ -22,10 +22,11 @@
         <p class="meta-line">
           <span id="modelName">Loading...</span>
           <span class="dot">•</span>
+          <span id="groundingMode">Loading...</span>
+          <span class="dot">•</span>
           <span id="sourceDate">Loading...</span>
         </p>
-        <p id="groundingStatus" class="meta-note">Loading grounding status...</p>
-        <p class="meta-note">Gemini key stays server-side. Output is constrained to the live catalog doc plus the approved email and collateral examples in Drive.</p>
+        <p class="meta-note" id="metaNote">Gemini key stays server-side. Output is constrained to the live catalog doc plus the approved email and collateral examples in Drive.</p>
       </div>
     </section>
 
@@ -37,8 +38,18 @@
         </div>
 
         <div class="field">
+          <label for="productSelect">Product / Surface</label>
+          <select id="productSelect" name="productSelect"></select>
+        </div>
+
+        <div class="field">
           <label for="examplePattern">Example pattern</label>
           <select id="examplePattern" name="examplePattern"></select>
+        </div>
+
+        <div class="field">
+          <label for="audienceDoorSelect">Audience door</label>
+          <select id="audienceDoorSelect" name="audienceDoorSelect"></select>
         </div>
 
         <div class="field">
@@ -46,12 +57,22 @@
           <input id="audienceInput" name="audienceInput" type="text" placeholder="Example: AWS partner enablement buyers">
         </div>
 
+        <div class="field">
+          <label for="proofPostureSelect">Proof posture</label>
+          <select id="proofPostureSelect" name="proofPostureSelect"></select>
+        </div>
+
+        <div class="field">
+          <label for="ctaInput">CTA</label>
+          <input id="ctaInput" name="ctaInput" type="text" placeholder="Example: Schedule a demo workshop">
+        </div>
+
         <div class="field field-wide">
-          <label for="promptInput">Objective</label>
+          <label for="promptInput">Objective / brief</label>
           <textarea
             id="promptInput"
             name="promptInput"
-            rows="9"
+            rows="7"
             placeholder="Example: Write an AWS-focused one-pager for On-the-Fly Labs aimed at solutions architects running customer workshops. Keep it direct and only use grounded proof."
             required
           ></textarea>
@@ -88,11 +109,17 @@
           <p id="exampleSource" class="example-source">Loading...</p>
         </article>
 
+        <article id="statusCard" class="status-card">
+          <p class="card-label">Grounding status</p>
+          <h2 id="statusTitle">Loading...</h2>
+          <p id="statusBody" class="status-body">Loading...</p>
+        </article>
+
         <section id="renderPanel" class="render-panel hidden">
           <div class="render-panel-head">
             <div>
-              <p class="card-label">Collateral Preview</p>
-              <h2 id="renderTitle">Rendered one-pager</h2>
+              <p class="card-label">Experimental Preview</p>
+              <h2 id="renderTitle">Rendered collateral</h2>
             </div>
             <button id="openPreviewButton" type="button">Open preview</button>
           </div>
