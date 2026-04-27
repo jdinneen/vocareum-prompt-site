@@ -67,15 +67,17 @@ def _split_stat_bar(text: str) -> list[dict[str, str]]:
 
 
 def _split_numbered_steps(text: str) -> list[dict[str, str]]:
-    matches = re.findall(r"(?:^|\n)\s*(\d+)\.\s+(.*?)(?=(?:\n\s*\d+\.\s+)|\Z)", text, re.S)
+    normalized = _normalize_line_breaks(text)
+    normalized = re.sub(r"\s+(?=\d+\.\s+)", "\n", normalized)
+    matches = re.findall(r"(?:^|\n)\s*(\d+)\.\s+(.*?)(?=(?:\n\s*\d+\.\s+)|\Z)", normalized, re.S)
     steps: list[dict[str, str]] = []
     for number, body in matches:
         body = " ".join(body.strip().split())
-        if "." in body:
+        if ". " in body:
             title, detail = body.split(".", 1)
             steps.append({"number": number, "title": title.strip(), "detail": detail.strip()})
         else:
-            steps.append({"number": number, "title": "", "detail": body})
+            steps.append({"number": number, "title": body.rstrip(".").strip(), "detail": ""})
     return steps
 
 
@@ -149,9 +151,9 @@ def parse_overview_text(text: str) -> dict[str, Any] | None:
 
 def parse_deck_text(text: str) -> dict[str, Any] | None:
     slides = _split_slides(text)
-    if len(slides) < 3:
+    if len(slides) != 6:
         return None
-    return {"slides": slides[:6]}
+    return {"slides": slides}
 
 
 def render_one_pager_html(payload: dict[str, Any]) -> str:
@@ -412,7 +414,7 @@ def render_one_pager_html(payload: dict[str, Any]) -> str:
     <section class="hero">
       <div class="hero-top">
         <div class="hero-brand">Vocareum</div>
-        <div class="hero-badge">Rendered Collateral</div>
+        <div class="hero-badge">Experimental Preview</div>
       </div>
       <h1>{headline}</h1>
       <div class="hero-sub">{subhead}</div>
@@ -451,7 +453,7 @@ def render_one_pager_html(payload: dict[str, Any]) -> str:
 
     <footer class="footer">
       <span>vocareum.com</span>
-      <span>mktg agent preview</span>
+      <span>experimental preview</span>
     </footer>
   </main>
 </body>

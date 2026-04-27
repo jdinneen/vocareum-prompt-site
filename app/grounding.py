@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import re
 import time
@@ -28,6 +29,8 @@ VOC_EXAMPLE_COLLATERAL_FOLDER_ID = os.environ.get(
     "1iyBguF5zprS4ykUaiRWiJIHA6Nd3Ss-j",
 )
 LIVE_GROUNDING_TTL_SECONDS = int(os.environ.get("LIVE_GROUNDING_TTL_SECONDS", "120"))
+SOURCE_TITLE = "Vocareum Product & Feature Catalog"
+APPROVED_EMAIL_TITLE = "Vocareum Approved Email Material"
 
 DRIVE_READONLY_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 MIME_DOC = "application/vnd.google-apps.document"
@@ -108,6 +111,42 @@ STYLE_PALETTE = {
     "light_gray": "#efefef",
     "coral": "#ff7f50",
 }
+
+DEFAULT_PUBLIC_STATS = [
+    "Since 2012",
+    "50M+ learner labs launched",
+    "5M+ learners served",
+    "7,000+ institutions and organizations",
+]
+CONTEXTUAL_STATS = [
+    "1M+ annual unique learners",
+    "2M+ AWS learners",
+]
+AUDIENCE_DOORS = [
+    "Colleges & Universities",
+    "Learning Platforms & EdTech",
+    "Certification & Credentialing",
+    "Technology Companies & Platforms",
+    "Global Services & Consulting",
+    "Online Universities & Scale Providers",
+]
+PROOF_POSTURES = [
+    {
+        "id": "strict-default",
+        "label": "Strict default public proof",
+        "description": "Use only the default public stats surface unless a source-specific proof anchor is explicitly needed.",
+    },
+    {
+        "id": "contextual-allowed",
+        "label": "Allow contextual proof",
+        "description": "Allow contextual approved stats like 1M+ annual unique learners or 2M+ AWS learners only when the request and support materials clearly justify them.",
+    },
+    {
+        "id": "named-proof-priority",
+        "label": "Named proof priority",
+        "description": "Prefer named public proof and qualitative support over broad scale anchors.",
+    },
+]
 
 _BUNDLE_CACHE: dict[str, object] = {"bundle": None, "loaded_at": 0.0}
 
@@ -232,11 +271,51 @@ def _parse_last_reviewed(text: str) -> str:
 
 
 def _parse_title(text: str) -> str:
-    for line in text.splitlines():
-        cleaned = _strip_markdown_decoration(line)
-        if cleaned:
-            return cleaned
-    return "Vocareum Product & Feature Catalog"
+    match = re.search(r"Vocareum Product\s*&\s*Feature Catalog", text, re.IGNORECASE)
+    if match:
+        return SOURCE_TITLE
+    return SOURCE_TITLE
+
+
+def _extract_relevant_lines(text: str, query: str, max_lines: int = 24) -> str:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    terms = {term for term in re.findall(r"[a-z0-9][a-z0-9+&.-]{2,}", query.lower())}
+    if not terms:
+        return "\n".join(lines[:max_lines])
+    scored: list[tuple[int, str]] = []
+    for line in lines:
+        lowered = line.lower()
+        score = sum(1 for term in terms if term in lowered)
+        if score:
+            scored.append((score, line))
+    if not scored:
+        return "\n".join(lines[:max_lines])
+    scored.sort(key=lambda item: (-item[0], len(item[1])))
+    selected = [line for _score, line in scored[:max_lines]]
+    return "\n".join(selected)
+
+
+def _collateral_matches_query(
+    name: str,
+    text: str,
+    query: str,
+    product_hint: str,
+    audience_hint: str,
+    example_id: str,
+) -> int:
+    haystack = f"{name}\n{text[:12000]}".lower()
+    query_terms = re.findall(r"[a-z0-9][a-z0-9+&.-]{2,}", query.lower())
+    score = sum(3 for term in query_terms if term in haystack)
+    if product_hint and product_hint.lower() in haystack:
+        score += 15
+    if audience_hint and audience_hint.lower() in haystack:
+        score += 10
+    for curated_name in COLLATERAL_FILES_BY_PATTERN.get(example_id, []):
+        if curated_name.lower() == name.lower():
+            score += 20
+    return score
 
 
 def _fallback_bundle() -> dict:
@@ -245,18 +324,10 @@ def _fallback_bundle() -> dict:
     except Exception:
         snapshot = {
             "source": {
-                "title": "Vocareum Product & Feature Catalog",
+                "title": SOURCE_TITLE,
                 "last_reviewed": "Unknown",
                 "doc_url": f"https://docs.google.com/document/d/{VOC_PRODUCT_CATALOG_DOC_ID}/edit",
             },
-            "public_stats": [
-                "Since 2012",
-                "50M+ learner labs launched",
-                "5M+ learners served",
-                "7,000+ institutions and organizations",
-                "1M+ annual unique learners",
-                "2M+ AWS learners",
-            ],
             "style_palette": STYLE_PALETTE,
         }
 
@@ -264,21 +335,16 @@ def _fallback_bundle() -> dict:
     catalog_front_matter, catalog_sections = _parse_named_sections(catalog_text, PRODUCT_SECTION_TITLES)
     return {
         "source": snapshot["source"],
+        "mode": "fallback",
+        "warnings": ["Live Google Drive grounding unavailable. Using local fallback snapshot."],
         "catalog_front_matter": catalog_front_matter,
         "catalog_sections": catalog_sections,
         "email_sections": {},
         "collateral_examples": {},
-        "public_stats": snapshot.get(
-            "public_stats",
-            [
-                "Since 2012",
-                "50M+ learner labs launched",
-                "5M+ learners served",
-                "7,000+ institutions and organizations",
-                "1M+ annual unique learners",
-                "2M+ AWS learners",
-            ],
-        ),
+        "default_public_stats": DEFAULT_PUBLIC_STATS,
+        "contextual_stats": CONTEXTUAL_STATS,
+        "audience_doors": AUDIENCE_DOORS,
+        "proof_postures": PROOF_POSTURES,
         "style_palette": snapshot.get("style_palette", STYLE_PALETTE),
     }
 
@@ -310,25 +376,22 @@ def _load_live_bundle() -> dict:
         except Exception:
             continue
 
-    source = {
-        "title": _parse_title(catalog_text) or "Vocareum Product & Feature Catalog (Doc)",
-        "last_reviewed": _parse_last_reviewed(catalog_text),
-        "doc_url": f"https://docs.google.com/document/d/{VOC_PRODUCT_CATALOG_DOC_ID}/edit",
-    }
     return {
-        "source": source,
+        "source": {
+            "title": _parse_title(catalog_text),
+            "last_reviewed": _parse_last_reviewed(catalog_text),
+            "doc_url": f"https://docs.google.com/document/d/{VOC_PRODUCT_CATALOG_DOC_ID}/edit",
+        },
+        "mode": "live",
+        "warnings": [],
         "catalog_front_matter": catalog_front_matter,
         "catalog_sections": catalog_sections,
         "email_sections": email_sections,
         "collateral_examples": collateral_examples,
-        "public_stats": [
-            "Since 2012",
-            "50M+ learner labs launched",
-            "5M+ learners served",
-            "7,000+ institutions and organizations",
-            "1M+ annual unique learners",
-            "2M+ AWS learners",
-        ],
+        "default_public_stats": DEFAULT_PUBLIC_STATS,
+        "contextual_stats": CONTEXTUAL_STATS,
+        "audience_doors": AUDIENCE_DOORS,
+        "proof_postures": PROOF_POSTURES,
         "style_palette": STYLE_PALETTE,
     }
 
@@ -342,8 +405,11 @@ def load_grounding() -> dict:
 
     try:
         fresh_bundle = _load_live_bundle()
-    except Exception:
+    except Exception as exc:
         fresh_bundle = _fallback_bundle()
+        warnings = list(fresh_bundle.get("warnings", []))
+        warnings.append(f"Live grounding error: {exc.__class__.__name__}")
+        fresh_bundle["warnings"] = warnings
 
     _BUNDLE_CACHE["bundle"] = fresh_bundle
     _BUNDLE_CACHE["loaded_at"] = now
@@ -379,70 +445,128 @@ def _email_example_block(example_id: str, bundle: dict) -> str:
     section = bundle["email_sections"].get(section_title, "").strip()
     if not section:
         return ""
-    return f"Approved Email Material example:\nSource: {section_title}\n\n{section}"
+    return f"{APPROVED_EMAIL_TITLE} example:\nSource: {section_title}\n\n{section}"
 
 
-def _collateral_example_block(example_id: str, bundle: dict) -> str:
-    names = COLLATERAL_FILES_BY_PATTERN.get(example_id, [])
-    if not names:
-        return ""
-    parts: list[str] = []
-    for name in names:
-        item = bundle["collateral_examples"].get(name)
-        if not item:
-            continue
+def _collateral_example_block(
+    example_id: str,
+    bundle: dict,
+    query: str,
+    product_hint: str,
+    audience_hint: str,
+) -> str:
+    examples = bundle.get("collateral_examples", {})
+    ranked: list[tuple[int, str, dict]] = []
+    for name, item in examples.items():
         excerpt = (item.get("text") or "").strip()
+        if not excerpt:
+            continue
+        score = _collateral_matches_query(
+            name,
+            excerpt,
+            query,
+            product_hint,
+            audience_hint,
+            example_id,
+        )
+        if score > 0:
+            ranked.append((score, name, item))
+    ranked.sort(key=lambda entry: (-entry[0], entry[1].lower()))
+    parts: list[str] = []
+    for _score, _name, item in ranked[:3]:
+        excerpt = _extract_relevant_lines(item.get("text", ""), query, max_lines=28)
         if excerpt:
-            parts.append(f"Example Collateral: {item['name']}\n\n{excerpt[:5000]}")
+            parts.append(f"Example Collateral: {item['name']}\n\n{excerpt}")
     return "\n\n---\n\n".join(parts)
 
 
-def general_grounding_block() -> str:
+def general_grounding_block(proof_posture: str = "strict-default") -> str:
     data = load_grounding()
-    public_stats = "\n".join(f"- {item}" for item in data["public_stats"])
+    public_stats = list(data.get("default_public_stats", DEFAULT_PUBLIC_STATS))
+    if proof_posture == "contextual-allowed":
+        public_stats.extend(data.get("contextual_stats", CONTEXTUAL_STATS))
+    public_stats_block = "\n".join(f"- {item}" for item in public_stats)
+    contextual_note = (
+        "Contextual approved stats may be used only when the request and support materials clearly justify them."
+        if proof_posture == "contextual-allowed"
+        else "Do not use contextual approved stats unless they are explicitly warranted by the request and support material."
+    )
     return f"""Document: {data['source']['title']}
 Last reviewed: {data['source']['last_reviewed']}
+Grounding mode: {data.get('mode', 'live')}
 Grounding scope: live Vocareum product catalog, approved email examples, and example collateral
 
 Catalog front matter:
 {data['catalog_front_matter'].strip() or "Use the live catalog as the governing source of truth."}
 
 Approved public stats:
-{public_stats}
+{public_stats_block}
+
+Proof rule:
+{contextual_note}
 """
 
 
-def grounding_block(user_text: str, asset_type: str = "custom", example: dict | None = None) -> str:
+def grounding_block(
+    user_text: str,
+    asset_type: str = "custom",
+    example: dict | None = None,
+    *,
+    audience_door: str = "",
+    proof_posture: str = "strict-default",
+) -> str:
     data = load_grounding()
     sections: list[str] = []
     product_block = product_grounding_block(user_text)
     if product_block:
         sections.append(f"Relevant live product catalog sections:\n{product_block}")
 
-    if example:
-        example_id = example.get("id", "")
-        if asset_type in {
-            "outreach-email",
-            "follow-up-email",
-            "capability-boundary-email",
-            "partner-email",
-            "custom",
-        }:
-            email_block = _email_example_block(example_id, data)
-            if email_block:
-                sections.append(email_block)
-        if asset_type in {"one-pager", "overview-collateral", "sales-deck-brief", "website-copy", "custom"}:
-            collateral_block = _collateral_example_block(example_id, data)
-            if collateral_block:
-                sections.append(collateral_block)
+    example_id = example.get("id", "") if example else ""
+    if example and asset_type in {
+        "outreach-email",
+        "follow-up-email",
+        "capability-boundary-email",
+        "partner-email",
+        "custom",
+    }:
+        email_block = _email_example_block(example_id, data)
+        if email_block:
+            sections.append(email_block)
+
+    if asset_type in {"one-pager", "overview-collateral", "sales-deck-brief", "website-copy", "custom"}:
+        product_matches = matched_products(user_text)
+        product_hint = product_matches[0] if product_matches else ""
+        collateral_block = _collateral_example_block(
+            example_id,
+            data,
+            user_text,
+            product_hint,
+            audience_door,
+        )
+        if collateral_block:
+            sections.append(collateral_block)
 
     if not sections:
-        return general_grounding_block()
+        return general_grounding_block(proof_posture)
+
+    stats = list(data.get("default_public_stats", DEFAULT_PUBLIC_STATS))
+    if proof_posture == "contextual-allowed":
+        stats.extend(data.get("contextual_stats", CONTEXTUAL_STATS))
+    stats_block = "\n".join(f"- {item}" for item in stats)
+    warnings = data.get("warnings", [])
+    warning_block = "\n".join(f"- {item}" for item in warnings) if warnings else "- none"
 
     joined_sections = "\n\n===\n\n".join(sections)
     return f"""Document: {data['source']['title']}
 Last reviewed: {data['source']['last_reviewed']}
+Grounding mode: {data.get('mode', 'live')}
 Grounding scope: use the live sources below as primary truth
+
+Grounding warnings:
+{warning_block}
+
+Default public stats:
+{stats_block}
 
 {joined_sections}
 """

@@ -121,7 +121,7 @@ def _build_user_prompt(req: GenerateRequest) -> str:
     example = resolve_example(req.example_pattern, req.asset_type, req.objective)
     example_block = example_prompt_block(example).strip()
     format_instructions = _output_format_instructions(req)
-    grounding = grounding_block(req.objective)
+    grounding = grounding_block(req.objective, req.asset_type, example)
     if matched_products(req.objective):
         return f"""Create a grounded Vocareum deliverable.
 
@@ -236,7 +236,8 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         ),
     )
     raw_text = (response.text or "").strip()
-    if matched_products(req.objective) and req.asset_type == "custom":
+    has_product_match = bool(matched_products(req.objective))
+    if has_product_match and req.asset_type == "custom":
         text = _normalize_product_answer(raw_text)
     elif req.asset_type == "custom":
         text = _force_two_paragraphs(raw_text)
