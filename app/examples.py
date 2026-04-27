@@ -200,7 +200,7 @@ EXAMPLE_PATTERNS = [
             "Problem section with direct pain framing.",
             "How It Works as numbered steps.",
             "Coverage or persona table when relevant.",
-            "Named proof quote or proof bar.",
+            "Paraphrased approved proof block.",
             "Split value framing such as For Partner / For Customer.",
         ],
         "claims_to_keep": [
@@ -223,12 +223,12 @@ EXAMPLE_PATTERNS = [
         "structure": [
             "Lead with one hero stat or proof anchor.",
             "Use numbered steps for the method.",
-            "Support with one named case study or proof example.",
+            "Support with one approved named proof example when relevant.",
             "Keep the rhythm: headline, proof, explanation, supporting detail, CTA.",
         ],
         "claims_to_keep": [
             "Numbered steps.",
-            "Named case study or proof when available.",
+            "Approved named proof when it directly strengthens the asset.",
         ],
         "claims_to_avoid": [
             "Do not bury the method under generic company description.",
@@ -244,13 +244,13 @@ EXAMPLE_PATTERNS = [
         "structure": [
             "Lead with a strong value proposition and proof.",
             "Use tables for product categories or capabilities where useful.",
-            "Include a customer quote or named proof block.",
+            "Include a paraphrased approved proof block.",
             "Make the asset easy to scan by solution family or audience.",
         ],
         "claims_to_keep": [
             "Lab categories or capability groupings.",
             "Platform capabilities.",
-            "Named quote or proof anchor.",
+            "Paraphrased approved proof anchor.",
         ],
         "claims_to_avoid": [
             "Do not turn every product into one blended surface.",
@@ -266,7 +266,7 @@ EXAMPLE_PATTERNS = [
         "structure": [
             "Open with market segment or buyer context.",
             "Show product portfolio or solution family structure.",
-            "Use proof points and named customers where grounded.",
+            "Use approved proof points and approved named proof only.",
             "Close with the next conversation or CTA.",
         ],
         "claims_to_keep": [

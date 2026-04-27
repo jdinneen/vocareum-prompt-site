@@ -128,6 +128,31 @@ APPROVED_NAMED_PROOF = [
     "Georgia Tech",
     "UC San Diego",
 ]
+ALLOWED_REFERENCE_NAMES = [
+    "Vocareum",
+    "AI Gateway",
+    "AI Notebook",
+    "AI Compass",
+    "Cloud Labs",
+    "Developer Workspaces",
+    "Virtual Desktop",
+    "Agentic AI Labs",
+    "On-the-Fly Labs",
+    "Simulations",
+    "Databases",
+    "GPU & CPU Compute",
+    "Cyber Ranges",
+    "Platform Enablement Labs",
+    "OpenAI",
+    "Anthropic Claude",
+    "Google Gemini",
+    "AWS Bedrock",
+    "Azure OpenAI",
+    "AWS",
+    "Azure",
+    "GCP",
+    "Databricks",
+]
 AUDIENCE_DOORS = [
     "Colleges & Universities",
     "Learning Platforms & EdTech",
@@ -140,17 +165,12 @@ PROOF_POSTURES = [
     {
         "id": "strict-default",
         "label": "Strict default public proof",
-        "description": "Use only the default public stats surface unless a source-specific proof anchor is explicitly needed.",
-    },
-    {
-        "id": "contextual-allowed",
-        "label": "Allow contextual proof",
-        "description": "Allow contextual approved stats like 1M+ annual unique learners or 2M+ AWS learners only when the request and support materials clearly justify them.",
+        "description": "Prefer approved public stats and only use approved named proof when it directly strengthens the asset.",
     },
     {
         "id": "named-proof-priority",
         "label": "Named proof priority",
-        "description": "Prefer named public proof and qualitative support over broad scale anchors.",
+        "description": "Prefer approved named public proof before broad scale anchors when the asset needs proof detail.",
     },
 ]
 
@@ -489,14 +509,12 @@ def _collateral_example_block(
 def general_grounding_block(proof_posture: str = "strict-default") -> str:
     data = load_grounding()
     public_stats = list(data.get("default_public_stats", DEFAULT_PUBLIC_STATS))
-    if proof_posture == "contextual-allowed":
-        public_stats.extend(data.get("contextual_stats", CONTEXTUAL_STATS))
     public_stats_block = "\n".join(f"- {item}" for item in public_stats)
     named_proof_block = "\n".join(f"- {item}" for item in APPROVED_NAMED_PROOF)
     contextual_note = (
-        "Contextual approved stats may be used only when the request and support materials clearly justify them."
-        if proof_posture == "contextual-allowed"
-        else "Do not use contextual approved stats unless they are explicitly warranted by the request and support material."
+        "Prefer approved named public proof before broad scale anchors when the asset needs proof detail."
+        if proof_posture == "named-proof-priority"
+        else "Prefer approved public stats first. Use approved named proof only when it directly strengthens the asset."
     )
     return f"""Document: {data['source']['title']}
 Last reviewed: {data['source']['last_reviewed']}
@@ -560,12 +578,15 @@ def grounding_block(
         return general_grounding_block(proof_posture)
 
     stats = list(data.get("default_public_stats", DEFAULT_PUBLIC_STATS))
-    if proof_posture == "contextual-allowed":
-        stats.extend(data.get("contextual_stats", CONTEXTUAL_STATS))
     stats_block = "\n".join(f"- {item}" for item in stats)
     named_proof_block = "\n".join(f"- {item}" for item in APPROVED_NAMED_PROOF)
     warnings = data.get("warnings", [])
     warning_block = "\n".join(f"- {item}" for item in warnings) if warnings else "- none"
+    proof_note = (
+        "Prefer approved named public proof before broad scale anchors when the asset needs proof detail."
+        if proof_posture == "named-proof-priority"
+        else "Prefer approved public stats first. Use approved named proof only when it directly strengthens the asset."
+    )
 
     joined_sections = "\n\n===\n\n".join(sections)
     return f"""Document: {data['source']['title']}
@@ -581,6 +602,9 @@ Default public stats:
 
 Approved named public proof:
 {named_proof_block}
+
+Proof rule:
+{proof_note}
 
 {joined_sections}
 """

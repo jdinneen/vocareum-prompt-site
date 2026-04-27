@@ -1,11 +1,13 @@
 from fastapi.testclient import TestClient
 
-from app.grounding import SOURCE_TITLE, grounding_block
+from app.examples import EXAMPLE_PATTERNS
+from app.grounding import PROOF_POSTURES, SOURCE_TITLE, grounding_block
 from app.main import (
     GenerateRequest,
     _build_user_prompt,
     _max_output_tokens,
     _polish_one_pager_output,
+    _sanitize_named_proof_lines,
     _sanitize_proof_sections,
     app,
 )
@@ -161,3 +163,32 @@ def test_one_pager_polish_normalizes_stat_bar_and_audiences():
     polished = _polish_one_pager_output(text)
     assert "Stat Bar: 2M+ AWS learners | 7,000+ institutions and organizations | 5M+ total platform learners" in polished
     assert "Who Uses This: AWS Solutions Architects; partner enablement teams; workshop operators" in polished
+
+
+def test_named_proof_sanitizer_rewrites_unapproved_named_reference():
+    req = GenerateRequest(asset_type="overview-collateral", objective="Overview objective")
+    text = (
+        "Headline: Test\n\n"
+        "Proof: Vocareum serves more than 7,000 institutions and organizations. "
+        "The University of Michigan partnership serves as named public deployment proof.\n\n"
+        "CTA: Book a review"
+    )
+    sanitized = _sanitize_named_proof_lines(req, text)
+    assert "University of Michigan" not in sanitized
+    assert "Use approved named public proof only" in sanitized
+    assert "AWS Academy" in sanitized
+
+
+def test_proof_postures_no_longer_expose_contextual_allowed():
+    posture_ids = [item["id"] for item in PROOF_POSTURES]
+    assert "contextual-allowed" not in posture_ids
+    assert posture_ids == ["strict-default", "named-proof-priority"]
+
+
+def test_collateral_examples_do_not_instruct_quotes():
+    collateral_examples = [item for item in EXAMPLE_PATTERNS if item["group"] == "collateral"]
+    combined = " ".join(
+        " ".join(item.get("structure", []) + item.get("claims_to_keep", []))
+        for item in collateral_examples
+    ).lower()
+    assert "quote" not in combined

@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .examples import DELIVERABLE_TYPES, example_prompt_block, examples_for, resolve_example
-from .grounding import grounding_block, load_grounding, matched_products
+from .grounding import ALLOWED_REFERENCE_NAMES, APPROVED_NAMED_PROOF, grounding_block, load_grounding, matched_products
 from .renderers import render_collateral
 
 log = logging.getLogger("vocareum_prompt_api")
@@ -288,6 +288,63 @@ def _sanitize_proof_sections(req: GenerateRequest, text: str) -> str:
     return updated
 
 
+def _allowed_named_references() -> set[str]:
+    return set(APPROVED_NAMED_PROOF) | set(ALLOWED_REFERENCE_NAMES)
+
+
+def _sentence_contains_unapproved_named_reference(sentence: str) -> bool:
+    candidates = re.findall(r"\b(?:[A-Z][A-Za-z0-9.+&-]*)(?:\s+[A-Z][A-Za-z0-9.+&-]*)+\b", sentence)
+    allowed = _allowed_named_references()
+    for candidate in candidates:
+        cleaned = candidate.strip(" .,:;()")
+        if cleaned in allowed:
+            continue
+        if cleaned.startswith("Slide "):
+            continue
+        return True
+    return False
+
+
+def _sanitize_named_proof_lines(req: GenerateRequest, text: str) -> str:
+    if req.asset_type not in {"one-pager", "overview-collateral", "website-copy", "sales-deck-brief"}:
+        return text
+
+    approved_list = ", ".join(APPROVED_NAMED_PROOF)
+    lines = text.splitlines()
+    cleaned_lines: list[str] = []
+    current_label = ""
+    label_pattern = re.compile(r"^\s*(Headline|Subhead|Stat Bar|Problem|How It Works|Who Uses This|Proof|CTA|Hero Headline|Hero Subhead|Proof Bar|Why It Matters|Core Capabilities|Best-Fit Buyers|Slide\s+\d+)\s*:?\s*(.*)$")
+    for line in lines:
+        match = label_pattern.match(line)
+        if match:
+            current_label = match.group(1)
+            remainder = match.group(2).strip()
+            if current_label in {"Proof", "Proof Bar"} and remainder and _sentence_contains_unapproved_named_reference(remainder):
+                cleaned_lines.append(f"{current_label}: Use approved named public proof only: {approved_list}.")
+            else:
+                cleaned_lines.append(line)
+            continue
+
+        stripped = line.strip()
+        if not stripped:
+            cleaned_lines.append(line)
+            continue
+
+        in_proof_context = current_label in {"Proof", "Proof Bar"} or current_label.startswith("Slide ")
+        if in_proof_context and _sentence_contains_unapproved_named_reference(stripped):
+            prefix = "* " if stripped.startswith("*") else ""
+            cleaned_lines.append(f"{prefix}Use approved named public proof only: {approved_list}.")
+            continue
+        cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
+
+
+def _strip_direct_quotes_globally(req: GenerateRequest, text: str) -> str:
+    if req.asset_type not in {"one-pager", "overview-collateral", "website-copy", "sales-deck-brief"}:
+        return text
+    return text.replace("“", "").replace("”", "").replace('"', "")
+
+
 def _normalize_stat_bar(text: str) -> str:
     period_split = re.sub(r"\.\s+(?=\d|\d+[A-Za-z+])", " | ", text.strip())
     parts = [part.strip(" .") for part in re.split(r"\s*(?:\||;|\n)\s*", period_split) if part.strip()]
@@ -359,7 +416,9 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         text = _force_two_paragraphs(raw_text)
     else:
         text = raw_text
+    text = _strip_direct_quotes_globally(req, text)
     text = _sanitize_proof_sections(req, text)
+    text = _sanitize_named_proof_lines(req, text)
     if req.asset_type == "one-pager":
         text = _polish_one_pager_output(text)
     if not text:
