@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vocareum Prompt Site</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="page-shell">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Grounded Gemini Prompting</p>
+        <h1>Turn a rough ask into governed Vocareum-ready copy.</h1>
+        <p class="lede">
+          This one-page tool uses a server-side Gemini model grounded in the current
+          Vocareum Product & Feature Catalog. Your Gemini API key stays on the server.
+        </p>
+        <div class="meta-row">
+          <div class="meta-card">
+            <span class="meta-label">Model</span>
+            <strong id="modelName">Loading...</strong>
+          </div>
+          <div class="meta-card">
+            <span class="meta-label">Catalog Review Date</span>
+            <strong id="sourceDate">Loading...</strong>
+          </div>
+        </div>
+      </div>
+      <div class="hero-stat">
+        <span class="stat-kicker">Grounded with approved anchors</span>
+        <strong>50M+</strong>
+        <span class="stat-caption">learner labs launched</span>
+      </div>
+    </section>
+
+    <section class="studio">
+      <form id="promptForm" class="panel form-panel">
+        <div class="field-grid">
+          <label>
+            <span>Asset type</span>
+            <select id="assetType" name="assetType">
+              <option value="website-copy">Website Copy</option>
+              <option value="landing-page">Landing Page</option>
+              <option value="outreach-email">Outreach Email</option>
+              <option value="one-pager-outline">One-Pager Outline</option>
+              <option value="executive-brief">Executive Brief</option>
+              <option value="custom" selected>Custom</option>
+            </select>
+          </label>
+          <label>
+            <span>Audience</span>
+            <input id="audience" name="audience" placeholder="Example: Colleges & Universities">
+          </label>
+        </div>
+
+        <label>
+          <span>Objective</span>
+          <textarea
+            id="objective"
+            name="objective"
+            rows="6"
+            placeholder="Example: Write homepage copy for AI Gateway aimed at university leaders who need governed AI access without instructional chaos."
+            required
+          ></textarea>
+        </label>
+
+        <label>
+          <span>Extra constraints</span>
+          <textarea
+            id="constraints"
+            name="constraints"
+            rows="4"
+            placeholder="Example: Keep it under 180 words. Mention University of Michigan only if relevant. End with a single CTA."
+          ></textarea>
+        </label>
+
+        <div class="actions">
+          <button id="submitButton" type="submit">Generate</button>
+          <p class="fine-print">
+            The site sends only your prompt inputs to the backend. The Gemini key is not exposed in the page source.
+          </p>
+        </div>
+      </form>
+
+      <section class="panel output-panel">
+        <div class="output-head">
+          <h2>Output</h2>
+          <button id="copyButton" type="button">Copy</button>
+        </div>
+        <pre id="outputBox">Your grounded output will appear here.</pre>
+      </section>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+{
+  "source": {
+    "title": "Vocareum Product & Feature Catalog (Doc)",
+    "last_reviewed": "2026-04-27",
+    "doc_url": "https://docs.google.com/document/d/1GTyQXMbz2l4ERcx1EwVyewr4Mp2vWjtyamNx0zd_rOc/edit"
+  },
+  "public_stats": [
+    "Since 2012",
+    "50M+ learner labs launched",
+    "5M+ learners served",
+    "7,000+ institutions and organizations",
+    "1M+ annual unique learners",
+    "2M+ AWS learners"
+  ],
+  "icp_verticals": [
+    {
+      "name": "Strategic Tech Platforms",
+      "examples": ["Microsoft", "AWS", "Google Cloud", "Databricks", "NVIDIA"]
+    },
+    {
+      "name": "GSIs & Consultancies",
+      "examples": ["Accenture", "Deloitte", "BCG", "Slalom"]
+    },
+    {
+      "name": "Online Platforms",
+      "examples": ["Coursera", "O'Reilly", "Udemy", "DeepLearning.AI", "Pearson"]
+    },
+    {
+      "name": "Standards Bodies & Credentialing",
+      "examples": ["CompTIA", "ISACA", "PMI", "SHRM Foundation"]
+    },
+    {
+      "name": "Higher Education",
+      "examples": ["Georgia Tech", "UC San Diego", "Carnegie Mellon", "MIT"]
+    },
+    {
+      "name": "Large Online Institutions",
+      "examples": ["WGU", "SNHU", "ASU Online", "Purdue Global"]
+    }
+  ],
+  "audience_doors": [
+    {
+      "name": "Colleges & Universities",
+      "positioning": "Govern AI adoption without instructional chaos. Lead with faculty-safe implementation, learner support, LMS fit, and evidence that AI improves practice."
+    },
+    {
+      "name": "Learning Platforms & EdTech",
+      "positioning": "Turn content into governed practice. Lead with hands-on execution, model access, and assessment without forcing the platform to own infrastructure risk."
+    },
+    {
+      "name": "Certification & Credentialing",
+      "positioning": "Move from content delivery to performance proof. Lead with live-task credibility, cost predictability, and real-environment readiness."
+    },
+    {
+      "name": "Technology Companies & Platforms",
+      "positioning": "Turn product interest into governed usage. Lead with enablement, sandboxed usage, policy control, and budget control."
+    },
+    {
+      "name": "Global Services & Consulting",
+      "positioning": "Deliver repeatable client training and internal upskilling with standardized governed environments and scalable cohort delivery."
+    },
+    {
+      "name": "Online Universities & Scale Providers",
+      "positioning": "Deliver competency-based outcomes at massive asynchronous scale with always-available execution and granular financial governance."
+    }
+  ],
+  "products": [
+    {
+      "name": "AI Notebook",
+      "summary": "Cloud-based Jupyter-powered learning and lab environment with AI and compute support."
+    },
+    {
+      "name": "Cloud Labs",
+      "summary": "Governed hands-on cloud access for real platform experience without unmanaged learner risk."
+    },
+    {
+      "name": "AI Gateway",
+      "summary": "Governed model access and policy layer for institutional or platform AI usage."
+    },
+    {
+      "name": "Developer Workspaces",
+      "summary": "Browser-based workspaces across VS Code, JupyterLab, RStudio, Linux Desktop, and related environments."
+    },
+    {
+      "name": "AI Compass",
+      "summary": "Course-grounded AI tutoring and learner support tied directly to learner workflow."
+    },
+    {
+      "name": "Agentic AI Labs",
+      "summary": "Browser-based IDE plus AI agent plus real cloud target inside a governed sandbox."
+    },
+    {
+      "name": "Platform Enablement Labs",
+      "summary": "Makes partner and customer platforms education-ready for training, enablement, and adoption."
+    }
+  ],
+  "proof_anchors": [
+    {
+      "name": "UC San Diego / GPS",
+      "anchor": "AI Compass math proof with 80k+ graded responses with feedback, 16.9k tutor questions, and failure-rate movement from 35.6% to 11.4% vs prior cohort."
+    },
+    {
+      "name": "University of Michigan",
+      "anchor": "Campus AI governance at scale with secure U-M GPT and Azure OpenAI support for 50,000+ students."
+    },
+    {
+      "name": "AWS Academy",
+      "anchor": "2M+ learners supported globally with restricted sandboxes, budget guardrails, and real AWS access."
+    },
+    {
+      "name": "Databricks Academy",
+      "anchor": "130,000+ badges and certifications plus 100,000 to 125,000 labs started per day across 600+ University Alliance members."
+    },
+    {
+      "name": "NAIRR Classroom",
+      "anchor": "Core role alongside Microsoft and NVIDIA when the conversation is governed AI access and national-scale infrastructure."
+    }
+  ],
+  "style_rules": [
+    "Lead with the strongest proof point or number before explanatory text.",
+    "Use short declarative sentences and cut unsupported adjectives.",
+    "Prefer table-driven comparisons and structured methodology when useful.",
+    "Use one clear CTA only.",
+    "Keep one coral accent anchor per section.",
+    "Use named proof with attribution when a direct public source exists.",
+    "Do not turn source-specific metrics into platform-wide averages."
+  ],
+  "style_palette": {
+    "slate": "#2e3a41",
+    "white": "#ffffff",
+    "black": "#000000",
+    "steel": "#445664",
+    "powder": "#c1d3dd",
+    "light_gray": "#efefef",
+    "coral": "#ff7f50"
+  }
+}
