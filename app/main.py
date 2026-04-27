@@ -284,7 +284,9 @@ def meta() -> dict:
     return {
         "model": _model_name(),
         "source": data["source"],
-        "public_stats": data["public_stats"],
+        "public_stats": data.get("public_stats", data.get("default_public_stats", [])),
+        "grounding_mode": data.get("mode", "unknown"),
+        "grounding_warnings": data.get("warnings", []),
         "style_palette": data["style_palette"],
         "deliverable_types": DELIVERABLE_TYPES,
         "example_patterns": [

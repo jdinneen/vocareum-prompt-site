@@ -22,6 +22,7 @@ const renderPanel = document.getElementById("renderPanel");
 const renderFrame = document.getElementById("renderFrame");
 const renderTitle = document.getElementById("renderTitle");
 const openPreviewButton = document.getElementById("openPreviewButton");
+const groundingStatus = document.getElementById("groundingStatus");
 
 let meta = {
   deliverable_types: [],
@@ -120,12 +121,16 @@ async function loadMeta() {
   meta = await response.json();
   modelName.textContent = meta.model;
   sourceDate.textContent = meta.source.last_reviewed;
+  groundingStatus.textContent = meta.grounding_warnings.length
+    ? `Grounding mode: ${meta.grounding_mode}. Warnings: ${meta.grounding_warnings.join(" | ")}`
+    : `Grounding mode: ${meta.grounding_mode}. Source: ${meta.source.title}.`;
   renderDeliverableOptions();
 
   setLog([
     "ready",
     `model: ${meta.model}`,
     `catalog: ${meta.source.last_reviewed}`,
+    `grounding: ${meta.grounding_mode}`,
     `patterns: ${meta.example_patterns.length}`
   ]);
 }

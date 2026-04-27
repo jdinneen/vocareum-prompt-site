@@ -1,5 +1,7 @@
+from fastapi.testclient import TestClient
+
 from app.grounding import SOURCE_TITLE, grounding_block
-from app.main import GenerateRequest, _build_user_prompt
+from app.main import GenerateRequest, _build_user_prompt, app
 from app.renderers import parse_deck_text
 
 
@@ -92,3 +94,29 @@ def test_parse_deck_text_requires_exactly_six_slides():
     parsed = parse_deck_text(six_slide_text)
     assert parsed is not None
     assert len(parsed["slides"]) == 6
+
+
+def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch):
+    monkeypatch.setattr(
+        "app.main.load_grounding",
+        lambda: {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+            },
+            "mode": "live",
+            "warnings": ["example warning"],
+            "default_public_stats": ["5M+ learners served"],
+            "style_palette": {"slate": "#2e3a41"},
+        },
+    )
+
+    client = TestClient(app)
+    response = client.get("/api/meta")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["public_stats"] == ["5M+ learners served"]
+    assert payload["grounding_mode"] == "live"
+    assert payload["grounding_warnings"] == ["example warning"]
