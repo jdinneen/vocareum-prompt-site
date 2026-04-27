@@ -88,23 +88,27 @@ def _output_format_instructions(req: GenerateRequest) -> str:
         return (
             "Return structured one-pager copy with these labeled sections in order: "
             "Headline, Subhead, Stat Bar, Problem, How It Works, Who Uses This, Proof, CTA. "
-            "Use concise scan-friendly copy. Use numbered steps inside How It Works if relevant."
+            "Use concise scan-friendly copy. Use numbered steps inside How It Works if relevant. "
+            "For Stat Bar and Proof, use only exact grounded stats, named proof, or grounded "
+            "qualitative claims. If the catalog does not provide named proof for a section, say so plainly instead of inventing it."
         )
     if req.asset_type == "overview-collateral":
         return (
             "Return structured collateral copy with these labeled sections in order: "
             "Headline, Subhead, Core Capabilities, Best-Fit Buyers, Proof, CTA. "
-            "You may use short bullets inside capability and buyer sections."
+            "You may use short bullets inside capability and buyer sections. Use only exact grounded proof."
         )
     if req.asset_type == "sales-deck-brief":
         return (
             "Return a six-slide brief labeled Slide 1 through Slide 6. For each slide, "
-            "provide a title and two to four bullets. Keep it ready for downstream deck building."
+            "provide a title and two to four bullets. Keep it ready for downstream deck building. "
+            "Do not introduce proof points or metrics that are not explicit in the grounding."
         )
     if req.asset_type == "website-copy":
         return (
             "Return structured website copy with these labeled sections in order: "
-            "Hero Headline, Hero Subhead, Proof Bar, Why It Matters, Core Capabilities, CTA."
+            "Hero Headline, Hero Subhead, Proof Bar, Why It Matters, Core Capabilities, CTA. "
+            "Proof Bar must use only exact grounded proof or an explicit grounded qualitative claim."
         )
     return "Return grounded business-ready copy in the most useful format for the request."
 
@@ -128,7 +132,7 @@ Use the grounding below.
 
 {example_block or "No explicit example pattern selected."}
 
-Answer directly from the relevant product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request.
+Answer directly from the relevant product catalog section. Follow the example pattern when useful, but do not copy example wording. Prioritize what the product is, how it works, core capabilities, best-fit use cases, and grounded proof. Use only proof, event references, customer names, and metrics that are explicit in the grounding. Do not open with generic company-wide scale stats unless they are directly necessary to answer the request.
 """
     return f"""Create a grounded Vocareum deliverable.
 
@@ -144,7 +148,7 @@ Use the grounding below.
 
 {example_block or "No explicit example pattern selected."}
 
-Follow the example pattern when useful, but do not copy example wording. Use only grounded product truth and approved proof.
+Follow the example pattern when useful, but do not copy example wording. Use only grounded product truth and approved proof. If a proof point or named example is not explicit in the grounding, do not add it.
 """
 
 
