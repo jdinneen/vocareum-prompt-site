@@ -99,6 +99,20 @@ textarea {
   gap: 12px;
 }
 
+#logBox {
+  min-height: 92px;
+  margin: 0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #eef2f3;
+  color: var(--steel);
+  font-family: "Fira Code", monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 button {
   border: 0;
   border-radius: 999px;

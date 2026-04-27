@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
+import uuid
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
@@ -8,6 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from .grounding import grounding_block, load_grounding
+
+log = logging.getLogger("vocareum_prompt_api")
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO)
 
 SYSTEM_INSTRUCTION = """You are a grounded Vocareum prompt assistant.
 
@@ -41,6 +48,8 @@ class GenerateResponse(BaseModel):
     model: str
     source_title: str
     source_last_reviewed: str
+    request_id: str
+    duration_ms: int
 
 
 def _require_api_key() -> str:
@@ -51,7 +60,7 @@ def _require_api_key() -> str:
 
 
 def _model_name() -> str:
-    return os.environ.get("GEMINI_MODEL", "").strip() or "gemini-2.5-pro"
+    return os.environ.get("GEMINI_MODEL", "").strip() or "gemini-3-flash-preview"
 
 
 def _allowed_origin() -> str:
@@ -69,32 +78,44 @@ Constraints: {req.extra_constraints or "None"}
 Use the grounding below.
 
 {grounding_block()}
-
-Return:
-- a strong final draft
-- short rationale bullets at the end under 'Why this works'
-- a short 'Grounding used' block naming only the relevant anchors you actually used
 """
 
 
-def _generate_text(req: GenerateRequest) -> str:
+def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     from google import genai
     from google.genai import types
 
+    start = time.perf_counter()
+    model = _model_name()
+    prompt = _build_user_prompt(req)
+    log.info(
+        "generate_start request_id=%s model=%s objective_chars=%s",
+        request_id,
+        model,
+        len(req.objective),
+    )
     client = genai.Client(api_key=_require_api_key())
     response = client.models.generate_content(
-        model=_model_name(),
-        contents=_build_user_prompt(req),
+        model=model,
+        contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
-            temperature=0.5,
+            temperature=0.35,
             max_output_tokens=1400,
         ),
     )
     text = (response.text or "").strip()
     if not text:
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
-    return text
+    duration_ms = round((time.perf_counter() - start) * 1000)
+    log.info(
+        "generate_done request_id=%s model=%s duration_ms=%s output_chars=%s",
+        request_id,
+        model,
+        duration_ms,
+        len(text),
+    )
+    return text, duration_ms
 
 
 app = FastAPI(title="Vocareum Prompt API")
@@ -132,9 +153,17 @@ def meta() -> dict:
 @app.post("/api/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest) -> GenerateResponse:
     data = load_grounding()
+    request_id = uuid.uuid4().hex[:12]
+    try:
+        output, duration_ms = _generate_text(req, request_id)
+    except Exception:
+        log.exception("generate_failed request_id=%s model=%s", request_id, _model_name())
+        raise
     return GenerateResponse(
-        output=_generate_text(req),
+        output=output,
         model=_model_name(),
         source_title=data["source"]["title"],
         source_last_reviewed=data["source"]["last_reviewed"],
+        request_id=request_id,
+        duration_ms=duration_ms,
     )

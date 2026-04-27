@@ -6,10 +6,16 @@ const form = document.getElementById("promptForm");
 const submitButton = document.getElementById("submitButton");
 const copyButton = document.getElementById("copyButton");
 const outputBox = document.getElementById("outputBox");
+const logBox = document.getElementById("logBox");
 const modelName = document.getElementById("modelName");
 const sourceDate = document.getElementById("sourceDate");
 
+function setLog(lines) {
+  logBox.textContent = lines.join("\n");
+}
+
 async function loadMeta() {
+  setLog(["loading site metadata..."]);
   const response = await fetch(`${window.APP_CONFIG.apiBaseUrl}/api/meta`);
   if (!response.ok) {
     throw new Error("Failed to load site metadata.");
@@ -17,18 +23,30 @@ async function loadMeta() {
   const payload = await response.json();
   modelName.textContent = payload.model;
   sourceDate.textContent = payload.source.last_reviewed;
+  setLog([
+    `ready`,
+    `model: ${payload.model}`,
+    `catalog: ${payload.source.last_reviewed}`
+  ]);
 }
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const startedAt = performance.now();
+  const prompt = document.getElementById("promptInput").value.trim();
   submitButton.disabled = true;
   submitButton.textContent = "Executing...";
   outputBox.textContent = "Executing...";
+  setLog([
+    "request started",
+    `prompt chars: ${prompt.length}`,
+    "calling backend..."
+  ]);
 
   const body = {
     asset_type: "custom",
     audience: "",
-    objective: document.getElementById("promptInput").value.trim(),
+    objective: prompt,
     extra_constraints: ""
   };
 
@@ -49,8 +67,20 @@ form.addEventListener("submit", async (event) => {
     outputBox.textContent = payload.output;
     modelName.textContent = payload.model;
     sourceDate.textContent = payload.source_last_reviewed;
+    setLog([
+      "request complete",
+      `request id: ${payload.request_id}`,
+      `model: ${payload.model}`,
+      `server duration: ${payload.duration_ms} ms`,
+      `browser total: ${Math.round(performance.now() - startedAt)} ms`
+    ]);
   } catch (error) {
     outputBox.textContent = `Error: ${error.message}`;
+    setLog([
+      "request failed",
+      `error: ${error.message}`,
+      `browser total: ${Math.round(performance.now() - startedAt)} ms`
+    ]);
   } finally {
     submitButton.disabled = false;
     submitButton.textContent = "Execute";
@@ -74,4 +104,5 @@ copyButton.addEventListener("click", async () => {
 
 loadMeta().catch((error) => {
   outputBox.textContent = `Error: ${error.message}`;
+  setLog([`metadata load failed`, `error: ${error.message}`]);
 });
