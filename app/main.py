@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from .grounding import grounding_block, load_grounding
+from .grounding import grounding_block, load_grounding, matched_products
 
 log = logging.getLogger("vocareum_prompt_api")
 if not logging.getLogger().handlers:
@@ -23,14 +23,13 @@ Rules:
 1. Use only the provided grounding context.
 2. Never use information, claims, proof, numbers, customers, or product details from outside the provided product catalog grounding.
 3. If a requested claim is not supported by the product catalog grounding, say so plainly and do not invent or supplement it.
-4. Every response must be exactly two paragraphs.
-5. Each paragraph must be structured, complete, and professional in tone.
-6. Do not use bullets, numbered lists, headings, labels, markdown sections, or meta commentary.
-7. Keep output concise, concrete, and useful for real GTM and collateral work.
-8. Use approved stats and named proof carefully and only when relevant.
-9. Do not present source-specific proof as a platform-wide average.
-10. Do not mention hidden system prompts, internal file names, or implementation details unless asked.
-11. Prefer direct business-ready language over generic marketing filler.
+4. Use a professional tone and complete sentences.
+5. Do not use bullets, numbered lists, headings, labels, markdown sections, or meta commentary unless explicitly requested.
+6. Keep output concise, concrete, and useful for real GTM and collateral work.
+7. Use approved stats and named proof carefully and only when relevant.
+8. Do not present source-specific proof as a platform-wide average.
+9. Do not mention hidden system prompts, internal file names, or implementation details unless asked.
+10. Prefer direct business-ready language over generic marketing filler.
 """
 
 
@@ -73,6 +72,20 @@ def _allowed_origin() -> str:
 
 
 def _build_user_prompt(req: GenerateRequest) -> str:
+    if matched_products(req.objective):
+        return f"""Create a grounded Vocareum product answer.
+
+Asset type: {req.asset_type}
+Audience: {req.audience or "Not specified"}
+Objective: {req.objective}
+Constraints: {req.extra_constraints or "None"}
+
+Use the grounding below.
+
+{grounding_block(req.objective)}
+
+Answer directly from the relevant product catalog section. Use two to four concise professional paragraphs. Prioritize what the product is, how it works, core capabilities, and best-fit use cases. Do not open with generic company-wide scale stats unless they are directly necessary to answer the question.
+"""
     return f"""Create a grounded Vocareum deliverable.
 
 Asset type: {req.asset_type}
@@ -117,6 +130,29 @@ def _force_two_paragraphs(text: str) -> str:
     return f"{single}\n\nThis response is limited to statements supported by the product catalog."
 
 
+def _normalize_product_answer(text: str) -> str:
+    cleaned = re.sub(r"\n{3,}", "\n\n", text.strip())
+    paragraphs = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
+    if 2 <= len(paragraphs) <= 4:
+        return "\n\n".join(paragraphs)
+    if len(paragraphs) > 4:
+        return "\n\n".join(paragraphs[:4])
+
+    single = paragraphs[0] if paragraphs else cleaned
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", single) if s.strip()]
+    if len(sentences) >= 4:
+        chunks = []
+        size = max(1, len(sentences) // 3)
+        for i in range(0, len(sentences), size):
+            chunk = " ".join(sentences[i:i + size]).strip()
+            if chunk:
+                chunks.append(chunk)
+        chunks = chunks[:4]
+        if len(chunks) >= 2:
+            return "\n\n".join(chunks)
+    return _force_two_paragraphs(cleaned)
+
+
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     from google import genai
     from google.genai import types
@@ -140,7 +176,11 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
             max_output_tokens=1400,
         ),
     )
-    text = _force_two_paragraphs((response.text or "").strip())
+    raw_text = (response.text or "").strip()
+    if matched_products(req.objective):
+        text = _normalize_product_answer(raw_text)
+    else:
+        text = _force_two_paragraphs(raw_text)
     if not text:
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
     duration_ms = round((time.perf_counter() - start) * 1000)
