@@ -249,6 +249,47 @@ button:disabled {
   font-size: 0.82rem;
 }
 
+.render-panel {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(68, 86, 100, 0.16);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.render-panel.hidden {
+  display: none;
+}
+
+.render-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(193, 211, 221, 0.34) 0%, rgba(255, 255, 255, 0.82) 100%);
+}
+
+.render-panel-head h2 {
+  margin: 6px 0 0;
+  font-size: 1.1rem;
+  color: var(--slate);
+}
+
+#openPreviewButton {
+  width: auto;
+  background: var(--white);
+  color: var(--slate);
+  border: 1px solid rgba(68, 86, 100, 0.14);
+  padding-inline: 14px;
+}
+
+#renderFrame {
+  width: 100%;
+  min-height: 760px;
+  border: 0;
+  background: #f5f2ec;
+}
+
 #logBox,
 #outputBox {
   margin: 0;
@@ -312,11 +353,16 @@ button:disabled {
   }
 
   #submitButton,
-  #copyButton {
+  #copyButton,
+  #openPreviewButton {
     max-width: none;
   }
 
   #outputBox {
     min-height: 420px;
+  }
+
+  #renderFrame {
+    min-height: 560px;
   }
 }
