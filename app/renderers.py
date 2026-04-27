@@ -32,9 +32,9 @@ def _normalize_line_breaks(text: str) -> str:
 def _extract_labeled_sections(text: str, labels: list[str]) -> dict[str, str]:
     cleaned = _normalize_line_breaks(text)
     pattern = re.compile(
-        r"(?ms)^(?:[#>*\-\s]*)?(?:\*\*)?(" + "|".join(re.escape(label) for label in labels) + r")(?:\*\*)?:\s*(.*?)\s*(?=^(?:[#>*\-\s]*)?(?:\*\*)?(?:"
+        r"(?ms)^(?:[#>*\-\s]*)?(?:\*\*)?(" + "|".join(re.escape(label) for label in labels) + r")(?:\*\*)?(?::)?\s*(.*?)\s*(?=^(?:[#>*\-\s]*)?(?:\*\*)?(?:"
         + "|".join(re.escape(label) for label in labels)
-        + r")(?:\*\*)?:\s*|\Z)"
+        + r")(?:\*\*)?(?::)?\s*|\Z)"
     )
     sections: dict[str, str] = {}
     for match in pattern.finditer(cleaned):
