@@ -22,14 +22,14 @@ async function loadMeta() {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   submitButton.disabled = true;
-  submitButton.textContent = "Generating...";
-  outputBox.textContent = "Generating grounded output...";
+  submitButton.textContent = "Executing...";
+  outputBox.textContent = "Executing...";
 
   const body = {
-    asset_type: document.getElementById("assetType").value,
-    audience: document.getElementById("audience").value.trim(),
-    objective: document.getElementById("objective").value.trim(),
-    extra_constraints: document.getElementById("constraints").value.trim()
+    asset_type: "custom",
+    audience: "",
+    objective: document.getElementById("promptInput").value.trim(),
+    extra_constraints: ""
   };
 
   try {
@@ -53,7 +53,7 @@ form.addEventListener("submit", async (event) => {
     outputBox.textContent = `Error: ${error.message}`;
   } finally {
     submitButton.disabled = false;
-    submitButton.textContent = "Generate";
+    submitButton.textContent = "Execute";
   }
 });
 
