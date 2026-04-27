@@ -1,7 +1,14 @@
 from fastapi.testclient import TestClient
 
 from app.grounding import SOURCE_TITLE, grounding_block
-from app.main import GenerateRequest, _build_user_prompt, _max_output_tokens, _sanitize_proof_sections, app
+from app.main import (
+    GenerateRequest,
+    _build_user_prompt,
+    _max_output_tokens,
+    _polish_one_pager_output,
+    _sanitize_proof_sections,
+    app,
+)
 from app.renderers import parse_deck_text
 
 
@@ -141,3 +148,16 @@ def test_proof_sanitizer_rewrites_direct_quotes_in_one_pager():
     assert '"We' not in sanitized
     assert "Named public proof: Jessica Gilmore, Senior Engagement Lead, AWS" in sanitized
     assert "do not use direct quotes" in sanitized
+
+
+def test_one_pager_polish_normalizes_stat_bar_and_audiences():
+    text = (
+        "Headline: Test\n\n"
+        "Stat Bar: 2M+ AWS learners. 7,000+ institutions and organizations. 5M+ total platform learners.\n\n"
+        "Who Uses This: AWS Solutions Architects, partner enablement teams, and workshop operators.\n\n"
+        "Proof: Vocareum supports AWS Academy.\n\n"
+        "CTA: Schedule a demo"
+    )
+    polished = _polish_one_pager_output(text)
+    assert "Stat Bar: 2M+ AWS learners | 7,000+ institutions and organizations | 5M+ total platform learners" in polished
+    assert "Who Uses This: AWS Solutions Architects; partner enablement teams; workshop operators" in polished

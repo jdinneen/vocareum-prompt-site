@@ -102,6 +102,9 @@ def _output_format_instructions(req: GenerateRequest) -> str:
             "Return structured one-pager copy with these labeled sections in order: "
             "Headline, Subhead, Stat Bar, Problem, How It Works, Who Uses This, Proof, CTA. "
             "Use concise scan-friendly copy. Use numbered steps inside How It Works if relevant. "
+            "Formatting rules: each section label must end with a colon; Stat Bar must be exactly 3 short items separated by ` | `; "
+            "Who Uses This must be a single line with exactly 3 audience items separated by `; `; "
+            "Proof must be one or two sentences of paraphrased proof and must not contain quotation marks. "
             "For Stat Bar and Proof, use only exact grounded stats, named proof, or grounded "
             "qualitative claims. If the catalog does not provide named proof for a section, say so plainly instead of inventing it."
         )
@@ -285,6 +288,43 @@ def _sanitize_proof_sections(req: GenerateRequest, text: str) -> str:
     return updated
 
 
+def _normalize_stat_bar(text: str) -> str:
+    period_split = re.sub(r"\.\s+(?=\d|\d+[A-Za-z+])", " | ", text.strip())
+    parts = [part.strip(" .") for part in re.split(r"\s*(?:\||;|\n)\s*", period_split) if part.strip()]
+    cleaned: list[str] = []
+    for part in parts:
+        part = re.sub(r"^[*-]\s*", "", part).strip()
+        if part:
+            cleaned.append(part)
+    return " | ".join(cleaned[:3])
+
+
+def _normalize_who_uses(text: str) -> str:
+    normalized = text.replace("\n", " ")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    parts = [part.strip(" .") for part in re.split(r"\s*(?:;|, and | and |,)\s*", normalized) if part.strip()]
+    deduped: list[str] = []
+    for part in parts:
+        lowered = part.lower()
+        if lowered not in {item.lower() for item in deduped}:
+            deduped.append(part)
+    return "; ".join(deduped[:3])
+
+
+def _polish_one_pager_output(text: str) -> str:
+    def _replace_section(label: str, transform) -> str:
+        pattern = re.compile(
+            rf"(?ms)^({re.escape(label)}:?\s*)(.*?)(?=^(?:Headline|Subhead|Stat Bar|Problem|How It Works|Who Uses This|Proof|CTA):?\s*|\Z)"
+        )
+        return pattern.sub(lambda m: f"{m.group(1)}{transform(m.group(2).strip())}\n\n", text_value[0])
+
+    text_value = [text]
+    text_value[0] = _replace_section("Stat Bar", _normalize_stat_bar)
+    text_value[0] = _replace_section("Who Uses This", _normalize_who_uses)
+    text_value[0] = _replace_section("Proof", lambda body: body.replace('"', "").replace("“", "").replace("”", "").strip())
+    return text_value[0].strip()
+
+
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     from google import genai
     from google.genai import types
@@ -320,6 +360,8 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     else:
         text = raw_text
     text = _sanitize_proof_sections(req, text)
+    if req.asset_type == "one-pager":
+        text = _polish_one_pager_output(text)
     if not text:
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
     duration_ms = round((time.perf_counter() - start) * 1000)
