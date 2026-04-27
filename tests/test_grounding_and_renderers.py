@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.grounding import SOURCE_TITLE, grounding_block
-from app.main import GenerateRequest, _build_user_prompt, app
+from app.main import GenerateRequest, _build_user_prompt, _max_output_tokens, app
 from app.renderers import parse_deck_text
 
 
@@ -120,3 +120,11 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
     assert payload["public_stats"] == ["5M+ learners served"]
     assert payload["grounding_mode"] == "live"
     assert payload["grounding_warnings"] == ["example warning"]
+
+
+def test_sales_deck_brief_gets_higher_output_budget():
+    deck_req = GenerateRequest(asset_type="sales-deck-brief", objective="Deck objective")
+    email_req = GenerateRequest(asset_type="outreach-email", objective="Email objective")
+
+    assert _max_output_tokens(deck_req) == 2200
+    assert _max_output_tokens(email_req) == 1400

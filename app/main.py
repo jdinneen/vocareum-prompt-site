@@ -123,6 +123,14 @@ def _output_format_instructions(req: GenerateRequest) -> str:
     return "Return grounded business-ready copy in the most useful format for the request."
 
 
+def _max_output_tokens(req: GenerateRequest) -> int:
+    if req.asset_type == "sales-deck-brief":
+        return 2200
+    if req.asset_type in {"one-pager", "overview-collateral", "website-copy"}:
+        return 1800
+    return 1400
+
+
 def _structured_brief(req: GenerateRequest) -> str:
     parts: list[str] = []
     if req.product:
@@ -267,7 +275,7 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.35,
-            max_output_tokens=1400,
+            max_output_tokens=_max_output_tokens(req),
         ),
     )
     raw_text = (response.text or "").strip()
