@@ -15,6 +15,14 @@ ONE_PAGER_SECTIONS = [
     "Proof",
     "CTA",
 ]
+OVERVIEW_SECTIONS = [
+    "Headline",
+    "Subhead",
+    "Core Capabilities",
+    "Best-Fit Buyers",
+    "Proof",
+    "CTA",
+]
 
 
 def _normalize_line_breaks(text: str) -> str:
@@ -81,6 +89,34 @@ def _paragraphs(text: str) -> list[str]:
     return [line.strip() for line in text.split("\n") if line.strip()]
 
 
+def _split_bullets_or_lines(text: str) -> list[str]:
+    normalized = _normalize_line_breaks(text)
+    normalized = re.sub(r"(?m)^\s*[-*]\s*", "", normalized)
+    if "\n" in normalized:
+        return [line.strip() for line in normalized.splitlines() if line.strip()]
+    return [part.strip() for part in re.split(r"\s*;\s*", normalized) if part.strip()]
+
+
+def _split_slides(text: str) -> list[dict[str, Any]]:
+    cleaned = _normalize_line_breaks(text)
+    pattern = re.compile(
+        r"(?ms)^Slide\s+(\d+):\s*(.*?)\s*(?=^Slide\s+\d+:\s*|\Z)"
+    )
+    slides: list[dict[str, Any]] = []
+    for match in pattern.finditer(cleaned):
+        number = match.group(1)
+        body = match.group(2).strip()
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+        title = lines[0] if lines else ""
+        bullets = []
+        for line in lines[1:]:
+            bullets.append(re.sub(r"^\s*[*-]\s*", "", line).strip())
+        if not bullets and len(lines) > 1:
+            bullets = lines[1:]
+        slides.append({"number": number, "title": title, "bullets": [b for b in bullets if b]})
+    return slides
+
+
 def parse_one_pager_text(text: str) -> dict[str, Any] | None:
     sections = _extract_labeled_sections(text, ONE_PAGER_SECTIONS)
     if not {"Headline", "Subhead", "Problem", "How It Works", "Proof", "CTA"}.issubset(sections):
@@ -95,6 +131,27 @@ def parse_one_pager_text(text: str) -> dict[str, Any] | None:
         "proof": _paragraphs(sections.get("Proof", "")),
         "cta": sections.get("CTA", ""),
     }
+
+
+def parse_overview_text(text: str) -> dict[str, Any] | None:
+    sections = _extract_labeled_sections(text, OVERVIEW_SECTIONS)
+    if not {"Headline", "Subhead", "Core Capabilities", "Best-Fit Buyers", "Proof", "CTA"}.issubset(sections):
+        return None
+    return {
+        "headline": sections.get("Headline", ""),
+        "subhead": sections.get("Subhead", ""),
+        "capabilities": _split_bullets_or_lines(sections.get("Core Capabilities", "")),
+        "buyers": _split_bullets_or_lines(sections.get("Best-Fit Buyers", "")),
+        "proof": _paragraphs(sections.get("Proof", "")),
+        "cta": sections.get("CTA", ""),
+    }
+
+
+def parse_deck_text(text: str) -> dict[str, Any] | None:
+    slides = _split_slides(text)
+    if len(slides) < 3:
+        return None
+    return {"slides": slides[:6]}
 
 
 def render_one_pager_html(payload: dict[str, Any]) -> str:
@@ -402,15 +459,139 @@ def render_one_pager_html(payload: dict[str, Any]) -> str:
 """
 
 
+def render_overview_html(payload: dict[str, Any]) -> str:
+    headline = html.escape(payload["headline"])
+    subhead = html.escape(payload["subhead"])
+    capabilities_html = "".join(f"<li>{html.escape(item)}</li>" for item in payload["capabilities"])
+    buyers_html = "".join(f"<li>{html.escape(item)}</li>" for item in payload["buyers"])
+    proof_html = "".join(f"<p>{html.escape(item)}</p>" for item in payload["proof"])
+    cta = html.escape(payload["cta"])
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{headline}</title>
+  <style>
+    :root {{ --slate:#2e3a41; --steel:#445664; --powder:#c1d3dd; --coral:#ff7f50; --white:#ffffff; }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; background:#f2efe8; font-family:"Manrope","Helvetica Neue",Arial,sans-serif; color:#111; }}
+    .canvas {{ width:min(1180px, calc(100vw - 32px)); margin:24px auto; background:#fff; box-shadow:0 26px 70px rgba(46,58,65,.12); }}
+    .hero {{ padding:34px 38px 24px; background:linear-gradient(135deg,#2e3a41 0%, #445664 100%); color:#fff; }}
+    .eyebrow {{ font-size:.72rem; text-transform:uppercase; letter-spacing:.18em; color:#c1d3dd; font-weight:800; }}
+    h1 {{ margin:10px 0 12px; font-size:clamp(2.3rem,5vw,3.7rem); line-height:.96; letter-spacing:-.05em; }}
+    .subhead {{ max-width:860px; font-size:1.02rem; line-height:1.6; color:#edf5f7; }}
+    .body {{ display:grid; grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr); gap:26px; padding:26px 38px; }}
+    .block {{ border-radius:18px; padding:18px 20px; background:#f8f9f9; border:1px solid rgba(68,86,100,.12); }}
+    .block h2 {{ margin:0 0 12px; font-size:.82rem; text-transform:uppercase; letter-spacing:.14em; color:#445664; }}
+    ul {{ margin:0; padding-left:18px; }}
+    li {{ margin-bottom:10px; line-height:1.5; }}
+    .proof {{ background:#2e3a41; color:#fff; }}
+    .proof h2 {{ color:#c1d3dd; }}
+    .proof p {{ margin:0 0 10px; line-height:1.58; color:#edf5f7; }}
+    .cta {{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:0 38px 30px; }}
+    .cta-tag {{ padding:8px 12px; border-radius:999px; background:#ff7f50; color:#fff; font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:.12em; }}
+    .cta-copy {{ font-size:1rem; line-height:1.6; color:#2e3a41; max-width:860px; }}
+    @media (max-width:900px) {{ .canvas {{ width:calc(100vw - 20px); }} .body {{ grid-template-columns:1fr; padding:20px; }} .hero, .cta {{ padding-left:20px; padding-right:20px; }} .cta {{ flex-direction:column; }} }}
+  </style>
+</head>
+<body>
+  <main class="canvas">
+    <section class="hero">
+      <div class="eyebrow">Vocareum overview collateral</div>
+      <h1>{headline}</h1>
+      <div class="subhead">{subhead}</div>
+    </section>
+    <section class="body">
+      <div class="block">
+        <h2>Core Capabilities</h2>
+        <ul>{capabilities_html}</ul>
+      </div>
+      <div class="block">
+        <h2>Best-Fit Buyers</h2>
+        <ul>{buyers_html}</ul>
+      </div>
+      <div class="block proof" style="grid-column:1 / -1;">
+        <h2>Proof</h2>
+        {proof_html}
+      </div>
+    </section>
+    <section class="cta">
+      <div class="cta-tag">CTA</div>
+      <div class="cta-copy">{cta}</div>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def render_deck_html(payload: dict[str, Any]) -> str:
+    slides_html = "".join(
+        f"""
+        <section class="slide">
+          <div class="slide-number">Slide {html.escape(slide['number'])}</div>
+          <h2>{html.escape(slide['title'])}</h2>
+          <ul>{''.join(f'<li>{html.escape(item)}</li>' for item in slide['bullets'])}</ul>
+        </section>
+        """
+        for slide in payload["slides"]
+    )
+    first_title = payload["slides"][0]["title"] if payload["slides"] else "Rendered deck"
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{html.escape(first_title)}</title>
+  <style>
+    :root {{ --slate:#2e3a41; --steel:#445664; --powder:#c1d3dd; --coral:#ff7f50; --white:#ffffff; }}
+    * {{ box-sizing:border-box; }}
+    body {{ margin:0; background:#ece7df; font-family:"Manrope","Helvetica Neue",Arial,sans-serif; color:#111; }}
+    .deck {{ width:min(1320px, calc(100vw - 32px)); margin:22px auto; display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:18px; }}
+    .slide {{ min-height:360px; background:#fff; border:1px solid rgba(68,86,100,.12); border-radius:24px; padding:22px; box-shadow:0 22px 60px rgba(46,58,65,.1); position:relative; overflow:hidden; }}
+    .slide::before {{ content:''; position:absolute; inset:0 auto auto 0; width:100%; height:10px; background:linear-gradient(90deg,#ff7f50 0%, #c1d3dd 100%); }}
+    .slide-number {{ margin-top:8px; font-size:.75rem; font-weight:800; text-transform:uppercase; letter-spacing:.14em; color:#445664; }}
+    h2 {{ margin:14px 0 14px; font-size:1.55rem; line-height:1.06; color:#2e3a41; letter-spacing:-.03em; }}
+    ul {{ margin:0; padding-left:18px; }}
+    li {{ margin-bottom:12px; line-height:1.52; }}
+    @media (max-width:720px) {{ .deck {{ width:calc(100vw - 20px); grid-template-columns:1fr; }} }}
+  </style>
+</head>
+<body>
+  <main class="deck">{slides_html}</main>
+</body>
+</html>"""
+
+
 def render_collateral(asset_type: str, output: str) -> dict[str, Any] | None:
-    if asset_type != "one-pager":
-        return None
-    payload = parse_one_pager_text(output)
-    if not payload:
-        return None
-    return {
-        "mode": "html",
-        "kind": "one-pager",
-        "title": payload["headline"],
-        "html": render_one_pager_html(payload),
-    }
+    if asset_type == "one-pager":
+        payload = parse_one_pager_text(output)
+        if not payload:
+            return None
+        return {
+            "mode": "html",
+            "kind": "one-pager",
+            "title": payload["headline"],
+            "html": render_one_pager_html(payload),
+        }
+    if asset_type == "overview-collateral":
+        payload = parse_overview_text(output)
+        if not payload:
+            return None
+        return {
+            "mode": "html",
+            "kind": "overview-collateral",
+            "title": payload["headline"],
+            "html": render_overview_html(payload),
+        }
+    if asset_type == "sales-deck-brief":
+        payload = parse_deck_text(output)
+        if not payload:
+            return None
+        return {
+            "mode": "html",
+            "kind": "sales-deck-brief",
+            "title": payload["slides"][0]["title"] if payload["slides"] else "Rendered deck",
+            "html": render_deck_html(payload),
+        }
+    return None

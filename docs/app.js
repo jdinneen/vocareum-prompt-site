@@ -39,7 +39,7 @@ function clearRenderPreview() {
     currentRenderUrl = "";
   }
   renderFrame.removeAttribute("src");
-  renderTitle.textContent = "Rendered one-pager";
+  renderTitle.textContent = "Rendered collateral";
   renderPanel.classList.add("hidden");
 }
 
@@ -48,7 +48,7 @@ function setRenderPreview(renderedHtml, renderedTitleText) {
   const blob = new Blob([renderedHtml], { type: "text/html" });
   currentRenderUrl = URL.createObjectURL(blob);
   renderFrame.src = currentRenderUrl;
-  renderTitle.textContent = renderedTitleText || "Rendered one-pager";
+  renderTitle.textContent = renderedTitleText || "Rendered collateral";
   renderPanel.classList.remove("hidden");
 }
 
@@ -188,7 +188,7 @@ form.addEventListener("submit", async (event) => {
     outputBox.textContent = payload.output;
     if (payload.rendered_html) {
       setRenderPreview(payload.rendered_html, payload.rendered_title);
-    } else if (assetType.value === "one-pager") {
+    } else if (["one-pager", "overview-collateral", "sales-deck-brief"].includes(assetType.value)) {
       setLog([
         "request complete",
         `request id: ${payload.request_id}`,
@@ -197,12 +197,12 @@ form.addEventListener("submit", async (event) => {
         `model: ${payload.model}`,
         `server duration: ${payload.duration_ms} ms`,
         `browser total: ${Math.round(performance.now() - startedAt)} ms`,
-        "preview note: renderer could not parse the one-pager sections"
+        "preview note: renderer could not parse the collateral sections"
       ]);
     }
     modelName.textContent = payload.model;
     sourceDate.textContent = payload.source_last_reviewed;
-    if (!(assetType.value === "one-pager" && !payload.rendered_html)) {
+    if (!(["one-pager", "overview-collateral", "sales-deck-brief"].includes(assetType.value) && !payload.rendered_html)) {
       setLog([
         "request complete",
         `request id: ${payload.request_id}`,
