@@ -82,7 +82,7 @@ Constraints: {req.extra_constraints or "None"}
 
 Use the grounding below.
 
-{grounding_block()}
+{grounding_block(req.objective)}
 
 Return exactly two professional paragraphs and nothing else.
 """
