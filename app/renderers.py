@@ -35,7 +35,7 @@ def _extract_labeled_sections(text: str, labels: list[str]) -> dict[str, str]:
 
 
 def _split_stat_bar(text: str) -> list[dict[str, str]]:
-    raw_parts = [part.strip(" .") for part in re.split(r"\s*;\s*", text) if part.strip()]
+    raw_parts = [part.strip(" .") for part in re.split(r"\s*(?:;|\|)\s*", text) if part.strip()]
     items: list[dict[str, str]] = []
     for part in raw_parts[:4]:
         value = part
