@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.grounding import SOURCE_TITLE, grounding_block
-from app.main import GenerateRequest, _build_user_prompt, _max_output_tokens, app
+from app.main import GenerateRequest, _build_user_prompt, _max_output_tokens, _sanitize_proof_sections, app
 from app.renderers import parse_deck_text
 
 
@@ -128,3 +128,16 @@ def test_sales_deck_brief_gets_higher_output_budget():
 
     assert _max_output_tokens(deck_req) == 2200
     assert _max_output_tokens(email_req) == 1400
+
+
+def test_proof_sanitizer_rewrites_direct_quotes_in_one_pager():
+    req = GenerateRequest(asset_type="one-pager", objective="One pager objective")
+    text = (
+        "Headline: Test\n\n"
+        "Proof: \"We've standardized on Vocareum for AWS enablement.\" — Jessica Gilmore, Senior Engagement Lead, AWS.\n\n"
+        "CTA: Schedule a demo"
+    )
+    sanitized = _sanitize_proof_sections(req, text)
+    assert '"We' not in sanitized
+    assert "Named public proof: Jessica Gilmore, Senior Engagement Lead, AWS" in sanitized
+    assert "do not use direct quotes" in sanitized

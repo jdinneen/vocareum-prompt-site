@@ -255,6 +255,36 @@ def _normalize_product_answer(text: str) -> str:
     return _force_two_paragraphs(cleaned)
 
 
+def _sanitize_proof_sections(req: GenerateRequest, text: str) -> str:
+    if req.asset_type not in {"one-pager", "overview-collateral", "website-copy", "sales-deck-brief"}:
+        return text
+
+    patterns = [
+        ("Proof", ["CTA"]),
+        ("Proof Bar", ["Why It Matters", "Core Capabilities", "CTA"]),
+    ]
+
+    def _sanitize_body(body: str) -> str:
+        quote_pattern = re.compile(r'["“](.+?)["”]\s*[—-]\s*([^\n]+)')
+        match = quote_pattern.search(body)
+        if match:
+            attribution = match.group(2).strip().rstrip(".")
+            return f"Named public proof: {attribution}. Use paraphrased proof only; do not use direct quotes."
+        if any(mark in body for mark in ['"', "“", "”"]):
+            cleaned = body.replace('"', "").replace("“", "").replace("”", "")
+            return f"{cleaned.strip()}\n\nUse paraphrased proof only; do not use direct quotes."
+        return body
+
+    updated = text
+    for label, next_labels in patterns:
+        next_clause = "|".join(re.escape(item) for item in next_labels)
+        pattern = re.compile(
+            rf"(?ms)^({re.escape(label)}:?\s*)(.*?)(?=^(?:{next_clause}):?\s*|\Z)"
+        )
+        updated = pattern.sub(lambda m: f"{m.group(1)}{_sanitize_body(m.group(2).strip())}\n\n", updated)
+    return updated
+
+
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     from google import genai
     from google.genai import types
@@ -289,6 +319,7 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         text = _force_two_paragraphs(raw_text)
     else:
         text = raw_text
+    text = _sanitize_proof_sections(req, text)
     if not text:
         raise HTTPException(status_code=502, detail="Gemini returned an empty response.")
     duration_ms = round((time.perf_counter() - start) * 1000)
