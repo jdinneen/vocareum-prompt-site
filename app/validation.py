@@ -7,7 +7,9 @@ from dataclasses import dataclass
 NUMBER_PHRASE_RE = re.compile(
     r"\$?\d[\d,]*(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+[A-Za-z][A-Za-z0-9./+-]*){0,4}"
 )
-NAME_RE = re.compile(r"\b(?:[A-Z][A-Za-z0-9.+&/-]*)(?:\s+[A-Z][A-Za-z0-9.+&/-]*)+\b")
+NAME_RE = re.compile(
+    r"\b(?:[A-Z][A-Za-z0-9.+&/-]*)(?:\s+(?:of|and|for|the|&)?\s*[A-Z][A-Za-z0-9.+&/-]*)+\b"
+)
 CLAIM_VERBS = {
     "supports",
     "support",
@@ -43,6 +45,8 @@ PROOF_CUES = {
     "example",
     "examples include",
     "used by",
+    "partnership",
+    "rollout",
     "partnered with",
     "partnered",
 }

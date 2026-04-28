@@ -201,6 +201,23 @@ def test_validation_rejects_unapproved_named_proof():
     assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
 
 
+def test_validation_rejects_partnership_rollout_reference_in_reply():
+    result = validate_output(
+        asset_type="reply-email",
+        text="We have implemented this governed access layer in partnerships such as our campus-wide rollout with the University of Michigan.",
+        support_text="AI Gateway provides governed model access.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": ["AWS Academy"],
+            "allowed_reference_names": ["Vocareum", "AI Gateway"],
+        },
+        objective_text="Reply to this thread.",
+    )
+
+    assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
+
+
 def test_deliverable_types_match_current_contract():
     assert [item["id"] for item in DELIVERABLE_TYPES] == [
         "outbound-email",
