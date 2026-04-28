@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 
 NUMBER_PHRASE_RE = re.compile(
-    r"\$?\d[\d,]*(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+[A-Za-z][A-Za-z0-9./+-]*){0,4}"
+    r"\$?\d[\d,]*(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+[A-Za-z][A-Za-z0-9/+-]*){0,4}"
 )
 NAME_RE = re.compile(
     r"\b(?:[A-Z][A-Za-z0-9.+&/-]*)(?:\s+(?:of|and|for|the|&)?\s*[A-Z][A-Za-z0-9.+&/-]*)+\b"
@@ -231,7 +231,8 @@ def validate_output(
         if len(tokens) < 3:
             continue
         overlap = tokens & support_tokens
-        if len(overlap) < max(2, (len(tokens) + 1) // 2):
+        min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
+        if len(overlap) < min_overlap:
             issues.append(
                 ValidationIssue(
                     "claims_not_in_grounding",

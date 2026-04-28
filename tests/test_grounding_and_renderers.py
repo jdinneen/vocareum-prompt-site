@@ -10,7 +10,7 @@ from app.main import (
     app,
 )
 from app.renderers import parse_deck_text, parse_overview_text
-from app.validation import validate_output
+from app.validation import _extract_numeric_phrases, validate_output
 
 
 def test_build_user_prompt_includes_example_grounding_excerpt(monkeypatch):
@@ -250,6 +250,31 @@ def test_validation_rejects_partnership_rollout_reference_in_reply():
     )
 
     assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
+
+
+def test_numeric_phrase_extraction_stops_at_sentence_boundary():
+    phrases = _extract_numeric_phrases(
+        "Vocareum works with 7,000+ institutions and organizations. We help teams govern access."
+    )
+
+    assert phrases == ["7,000+ institutions and organizations"]
+
+
+def test_validation_allows_short_grounded_claim_with_one_meaningful_overlap():
+    result = validate_output(
+        asset_type="outbound-email",
+        text="We help teams govern access.",
+        support_text="AI Gateway provides governed model access with policy controls.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": [],
+        },
+        objective_text="Write an outbound email about governed model access.",
+    )
+
+    assert result.ok
+    assert result.issues == []
 
 
 def test_deliverable_types_match_current_contract():
