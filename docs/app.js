@@ -2,6 +2,56 @@ window.APP_CONFIG = window.APP_CONFIG || {
   apiBaseUrl: "https://vocareum-prompt-api-379861060062.us-central1.run.app"
 };
 
+function ensureCurrentMarkup() {
+  const hasCurrentShell = document.getElementById("sourceNote")
+    && document.getElementById("statusPill")
+    && document.getElementById("promptInput");
+  if (hasCurrentShell) {
+    return;
+  }
+
+  const shell = document.querySelector(".page-shell") || document.body;
+  shell.innerHTML = `
+    <section class="hero">
+      <p class="eyebrow">Vocareum Grounded Assistant</p>
+      <h1>Ask for anything grounded in the catalog.</h1>
+      <p class="lede">Ask a question, request copy, or paste a rough note. The response stays inside supported Vocareum source material.</p>
+      <p id="sourceNote" class="source-note">Loading source status...</p>
+    </section>
+
+    <section class="workspace">
+      <form id="promptForm" class="prompt-panel">
+        <label class="field" for="promptInput">
+          <span>Your prompt</span>
+          <textarea
+            id="promptInput"
+            name="promptInput"
+            rows="12"
+            placeholder="Example: Explain AI Gateway for a university CIO in three short paragraphs, focusing on governed AI access for students and faculty."
+            required
+          ></textarea>
+        </label>
+
+        <div class="action-row">
+          <button id="submitButton" class="primary-button" type="submit">Ask</button>
+          <button id="copyButton" class="secondary-button" type="button">Copy</button>
+        </div>
+      </form>
+
+      <section class="response-panel">
+        <div class="response-head">
+          <p class="section-label">Response</p>
+          <span id="statusPill" class="status-pill">Ready</span>
+        </div>
+        <p id="statusText" class="status-text">Enter a prompt and run it.</p>
+        <pre id="outputBox" class="output-box">Your grounded response will appear here.</pre>
+      </section>
+    </section>
+  `;
+}
+
+ensureCurrentMarkup();
+
 const form = document.getElementById("promptForm");
 const promptInput = document.getElementById("promptInput");
 const submitButton = document.getElementById("submitButton");
