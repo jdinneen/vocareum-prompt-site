@@ -267,8 +267,10 @@ def validate_output(
                 )
             )
 
-    # Grounded-answer mode paraphrases catalog content to answer questions,
-    # so require lower token overlap than marketing copy workflows.
+    # Grounded-answer mode paraphrases catalog content to answer questions.
+    # Skip the claim-verb overlap check entirely for Q&A — it produces too
+    # many false positives on natural paraphrasing.  Numeric, proof-name,
+    # and quote checks still apply.
     is_answer_mode = asset_type == "grounded-answer"
 
     for sentence in _sentences(text):
@@ -282,16 +284,15 @@ def validate_output(
                             sentence[:240],
                         )
                     )
+        if is_answer_mode:
+            continue
         if not _sentence_needs_grounding(sentence):
             continue
         tokens = _significant_tokens(sentence)
         if len(tokens) < 3:
             continue
         overlap = tokens & support_tokens
-        if is_answer_mode:
-            min_overlap = 1 if len(tokens) <= 5 else max(2, (len(tokens) + 2) // 3)
-        else:
-            min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
+        min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
         if len(overlap) < min_overlap:
             issues.append(
                 ValidationIssue(
