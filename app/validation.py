@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 
 NUMBER_PHRASE_RE = re.compile(
-    r"\$?\d[\d,]*(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+[A-Za-z][A-Za-z0-9/+-]*){0,4}"
+    r"\$?\d[\d,]*(?::\d{2})?(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+[A-Za-z][A-Za-z0-9/+-]*){0,4}"
 )
 NAME_RE = re.compile(
     r"\b(?:[A-Z][A-Za-z0-9.+&/-]*)(?:\s+(?:of|and|for|the|&)?\s*[A-Z][A-Za-z0-9.+&/-]*)+\b"
@@ -149,6 +149,19 @@ def _allowed_numeric_set(truth_bundle: dict, support_text: str) -> set[str]:
     return {item for item in allowed if item}
 
 
+def _numeric_phrase_allowed(normalized_phrase: str, allowed_numbers: set[str]) -> bool:
+    if normalized_phrase in allowed_numbers:
+        return True
+    phrase_stem = re.match(r"^\$?\d[\d,]*(?::\d{2})?(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+(?:am|pm))?", normalized_phrase)
+    for allowed in allowed_numbers:
+        allowed_stem = re.match(r"^\$?\d[\d,]*(?::\d{2})?(?:\.\d+)?(?:\+|%|[kKmMbB])?(?:\s+(?:am|pm))?", allowed)
+        if phrase_stem and allowed_stem and phrase_stem.group(0) == allowed_stem.group(0):
+            return True
+        if normalized_phrase.startswith(allowed) or allowed.startswith(normalized_phrase):
+            return True
+    return False
+
+
 def _quote_issues(text: str) -> list[ValidationIssue]:
     if '"' in text or "“" in text or "”" in text:
         return [ValidationIssue("direct_quotes", "Direct quotes are not allowed in generated output.", text[:200])]
@@ -205,7 +218,7 @@ def validate_output(
 
     for phrase in _extract_numeric_phrases(text):
         normalized = _normalize(phrase)
-        if normalized not in allowed_numbers:
+        if not _numeric_phrase_allowed(normalized, allowed_numbers):
             issues.append(
                 ValidationIssue(
                     "unsupported_numbers",

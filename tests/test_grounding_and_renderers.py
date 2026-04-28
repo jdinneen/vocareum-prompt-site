@@ -110,6 +110,17 @@ def test_reply_post_process_adds_missing_scheduling_response():
     assert "suggest an alternative" in processed.lower()
 
 
+def test_validation_allows_time_from_thread_context():
+    result = validate_output(
+        asset_type="reply-email",
+        text="If next Tuesday at 5:00 PM works for you, I am happy to confirm that time.",
+        support_text="AI Gateway provides governed model access.",
+        truth_bundle={"approved_numeric_claims": [], "default_public_stats": [], "approved_named_proof": [], "allowed_reference_names": ["AI Gateway"]},
+        objective_text="Thread: Would next Tuesday at 5:00 PM work for a follow-up?",
+    )
+    assert result.ok
+
+
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
     monkeypatch.setattr(
         "app.grounding.load_grounding",
