@@ -88,7 +88,7 @@ def _output_format_instructions(req: GenerateRequest) -> str:
         return (
             "Return a complete send-ready reply email. Assume the brief may include a pasted thread or incoming email. "
             "Infer the actual ask from that thread, answer directly, and return only the reply. Put the subject line first as "
-            "`Subject: ...`, then a blank line, then the email body."
+            "`Subject: ...`, then a blank line, then the email body. If the thread contains more than one ask, answer all of them in the reply."
         )
     return (
         "Return structured sales collateral copy with these labeled sections in order: "
@@ -130,7 +130,7 @@ def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") 
     )
     structured_brief = _structured_brief(req)
     mode_note = (
-        "If the user pasted an email thread, treat it as user-provided context and write only the best reply."
+        "If the user pasted an email thread, treat it as user-provided context and write only the best reply. Explicitly identify every concrete ask in the thread and answer each one."
         if req.asset_type == "reply-email"
         else "Write directly for the requested workflow."
     )

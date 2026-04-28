@@ -59,6 +59,40 @@ def test_build_user_prompt_includes_example_grounding_excerpt(monkeypatch):
     assert "AWS collateral example excerpt" in prompt
 
 
+def test_reply_prompt_requires_all_thread_asks(monkeypatch):
+    monkeypatch.setattr(
+        "app.grounding.load_grounding",
+        lambda: {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+            },
+            "mode": "live",
+            "warnings": [],
+            "catalog_front_matter": "Catalog front matter",
+            "catalog_sections": {"AI Gateway": "AI Gateway\nGrounded section"},
+            "email_sections": {},
+            "collateral_examples": {},
+            "truth_bundle": {
+                "default_public_stats": ["2M+ AWS learners"],
+                "approved_named_proof": ["AWS Academy"],
+            },
+            "style_palette": {},
+        },
+    )
+    req = GenerateRequest(
+        asset_type="reply-email",
+        product="AI Gateway",
+        objective="Thread: Can you provide ChatGPT access, and would next Tuesday at 5:00 PM work for a follow-up?",
+    )
+
+    prompt = _build_user_prompt(req)
+
+    assert "If the thread contains more than one ask, answer all of them in the reply." in prompt
+    assert "Explicitly identify every concrete ask in the thread and answer each one." in prompt
+
+
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
     monkeypatch.setattr(
         "app.grounding.load_grounding",
