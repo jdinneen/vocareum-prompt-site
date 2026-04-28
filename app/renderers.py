@@ -576,13 +576,13 @@ def render_collateral(asset_type: str, output: str) -> dict[str, Any] | None:
             "title": payload["headline"],
             "html": render_one_pager_html(payload),
         }
-    if asset_type == "overview-collateral":
+    if asset_type in {"overview-collateral", "sales-collateral"}:
         payload = parse_overview_text(output)
         if not payload:
             return None
         return {
             "mode": "html",
-            "kind": "overview-collateral",
+            "kind": asset_type,
             "title": payload["headline"],
             "html": render_overview_html(payload),
         }

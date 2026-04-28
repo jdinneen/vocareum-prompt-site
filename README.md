@@ -1,26 +1,34 @@
 # Vocareum Prompt Site
 
-One-page prompt site with:
+Focused internal GTM tool with three workflows only:
 
-- static frontend for GitHub Pages
-- FastAPI backend for Cloud Run
-- server-side Gemini calls so `GOOGLE_API_KEY` never reaches the browser
-- live grounding from the governed Vocareum Product & Feature Catalog Google Doc
-- live approved email examples from a separate Google Doc
-- live collateral examples from a Google Drive folder
-- explicit `live` vs `fallback` grounding status
-- structured GTM inputs for product, audience door, proof posture, and CTA
-- experimental collateral previews for one-pagers, overview collateral, and deck briefs when the generated structure is parseable
+- outbound email
+- reply to pasted email thread
+- sales collateral builder
+
+The site is grounded by:
+
+- the live `Vocareum Product & Feature Catalog` Google Doc
+- the live `Vocareum Approved Email Material` Google Doc
+- the live `Example Collateral` Drive folder
+- a governed local truth bundle generated from repo-approved source files
+
+It also runs deterministic validation before returning output. The validator blocks:
+
+- unsupported numbers
+- disallowed named proof
+- direct quotes
+- unsupported claim sentences that are not sufficiently grounded in the selected source context
 
 ## Architecture
 
-- `docs/`: static frontend served by GitHub Pages
-- `app/`: FastAPI backend served by Cloud Run
-- `app/grounding.py`: loads live Google Drive / Google Doc grounding and example material
-- `app/renderers.py`: turns parseable collateral outputs into lightweight HTML previews
-- `app/data/grounding_snapshot.json`: local fallback if live reads fail
-- `app/data/product_catalog_v1.1.md`: local fallback catalog snapshot
-- `tests/`: prompt-site-local tests
+- `docs/`: static frontend for GitHub Pages
+- `app/`: FastAPI backend for Cloud Run
+- `app/grounding.py`: loads live Drive/Docs grounding plus the governed truth bundle
+- `app/validation.py`: deterministic output validation
+- `app/renderers.py`: lightweight collateral preview renderer
+- `app/data/governed_truth_bundle.json`: governed local proof/stats bundle
+- `scripts/build_governed_truth_bundle.py`: regenerates the local truth bundle from repo-approved source files
 
 ## Environment
 
@@ -38,34 +46,19 @@ The hosted Cloud Run service account needs read access to:
 
 - the catalog doc
 - the approved email doc
-- the collateral folder and the example files inside it
+- the collateral folder and example files inside it
 
 The Cloud Run project also needs `drive.googleapis.com` enabled.
-
-## Product Notes
-
-- The app surfaces grounding mode so users can see whether it is reading live Drive sources or a fallback snapshot.
-- Default public stats and contextual approved stats are handled separately.
-- Collateral retrieval is ranked from the Drive folder using the request, selected product, selected audience door, and example pattern.
-- Collateral previews are intentionally marked experimental; if the generated structure is not parseable, the preview is suppressed and the raw text remains the source of truth.
 
 ## Local Run
 
 ```bash
 cd sites/vocareum-prompt-site
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-export GOOGLE_API_KEY=...
-export GEMINI_MODEL=gemini-3-flash-preview
-uvicorn app.main:app --reload
+PYTHONPATH=. /Users/jondinneen/Desktop/AIMktg/.venv/bin/python scripts/build_governed_truth_bundle.py
+PYTHONPATH=. /Users/jondinneen/Desktop/AIMktg/.venv/bin/python -m uvicorn app.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000`.
-
-When run inside the AIMktg repo, the app will first try the existing local
-Drive OAuth token path from `core/google_auth.py`. In Cloud Run it falls back
-to ADC and the attached service account.
 
 ## Deploy
 
@@ -81,5 +74,5 @@ gcloud run deploy vocareum-prompt-api \
 
 Frontend:
 
-- set `window.APP_CONFIG.apiBaseUrl` in `docs/app.js`
+- keep `window.APP_CONFIG.apiBaseUrl` in `docs/app.js` pointed at the live API
 - publish `docs/` with GitHub Pages

@@ -15,7 +15,7 @@
       <div class="hero-copy">
         <p class="eyebrow">Vocareum messaging engine</p>
         <h1>mktg agent</h1>
-        <p class="lede">Generate grounded emails and collateral from the live product catalog, the approved email doc, and the example collateral folder in Drive.</p>
+        <p class="lede">Three jobs only: outbound email, reply to an email thread, and sales collateral grounded in the live catalog plus approved examples.</p>
       </div>
       <div class="hero-meta">
         <p class="meta-title">Live config</p>
@@ -26,14 +26,14 @@
           <span class="dot">•</span>
           <span id="sourceDate">Loading...</span>
         </p>
-        <p class="meta-note" id="metaNote">Gemini key stays server-side. Output is constrained to the live catalog doc plus the approved email and collateral examples in Drive.</p>
+        <p class="meta-note" id="metaNote">Live catalog grounding with deterministic validation before output is returned.</p>
       </div>
     </section>
 
     <section class="workspace">
       <form id="promptForm" class="control-panel">
         <div class="field">
-          <label for="assetType">Deliverable</label>
+          <label for="assetType">Workflow</label>
           <select id="assetType" name="assetType"></select>
         </div>
 
@@ -43,37 +43,17 @@
         </div>
 
         <div class="field">
-          <label for="examplePattern">Example pattern</label>
-          <select id="examplePattern" name="examplePattern"></select>
-        </div>
-
-        <div class="field">
-          <label for="audienceDoorSelect">Audience door</label>
-          <select id="audienceDoorSelect" name="audienceDoorSelect"></select>
-        </div>
-
-        <div class="field">
           <label for="audienceInput">Audience</label>
-          <input id="audienceInput" name="audienceInput" type="text" placeholder="Example: AWS partner enablement buyers">
-        </div>
-
-        <div class="field">
-          <label for="proofPostureSelect">Proof posture</label>
-          <select id="proofPostureSelect" name="proofPostureSelect"></select>
-        </div>
-
-        <div class="field">
-          <label for="ctaInput">CTA</label>
-          <input id="ctaInput" name="ctaInput" type="text" placeholder="Example: Schedule a demo workshop">
+          <input id="audienceInput" name="audienceInput" type="text" placeholder="Optional. Example: AWS partner enablement buyers">
         </div>
 
         <div class="field field-wide">
-          <label for="promptInput">Objective / brief</label>
+          <label for="promptInput">Brief or pasted thread</label>
           <textarea
             id="promptInput"
             name="promptInput"
-            rows="7"
-            placeholder="Example: Write an AWS-focused one-pager for On-the-Fly Labs aimed at solutions architects running customer workshops. Keep it direct and only use grounded proof."
+            rows="9"
+            placeholder="For outbound email: describe the person, product angle, and ask. For reply-email: paste the incoming thread and say what kind of reply you want. For sales collateral: describe the asset you need."
             required
           ></textarea>
         </div>
@@ -84,15 +64,14 @@
             id="constraintsInput"
             name="constraintsInput"
             rows="4"
-            placeholder="Example: Emphasize governance and cost control. Keep the CTA to a workshop or follow-up meeting. Avoid academic framing."
+            placeholder="Optional. Example: Keep it short. Emphasize governance and cost control. Avoid academic framing."
           ></textarea>
         </div>
 
         <div class="preset-strip">
-          <button class="preset-button" type="button" data-asset-type="outreach-email" data-example-pattern="governed-model-access" data-prompt="Write an email to a university buyer asking whether Vocareum can provide governed model access for students." data-constraints="Keep it concise. Clarify the boundary around consumer logins.">Governed access email</button>
-          <button class="preset-button" type="button" data-asset-type="follow-up-email" data-example-pattern="post-event-follow-up" data-prompt="Write a post-event follow-up email after meeting a strategic technology-platform contact at ASU+GSV." data-constraints="Reference a real follow-up session and ask for a 30-minute meeting next week.">Post-event follow-up</button>
-          <button class="preset-button" type="button" data-asset-type="one-pager" data-example-pattern="aws-cosell-one-pager" data-prompt="Write one-pager copy for On-the-Fly Labs for AWS solutions architects running customer workshops." data-constraints="Use grounded AWS proof and keep the sections scan-friendly.">AWS one-pager</button>
-          <button class="preset-button" type="button" data-asset-type="sales-deck-brief" data-example-pattern="sales-collateral" data-prompt="Create a sales deck brief for Agentic AI Labs aimed at technology platform buyers." data-constraints="Six slides. Focus on real environments, governance, and best-fit use cases.">Deck brief</button>
+          <button class="preset-button" type="button" data-asset-type="outbound-email" data-prompt="Write an outbound email to a university buyer asking whether Vocareum can provide governed model access for students in AI coursework." data-constraints="Keep it concise. Clarify the boundary around consumer logins.">Outbound email</button>
+          <button class="preset-button" type="button" data-asset-type="reply-email" data-prompt="Prospect thread:\nHi Jon,\nThis was helpful. Can Vocareum provide ChatGPT access for students directly, or would they need API-based access? Also, would next Tuesday or Wednesday work for a follow-up?\n\nNeed: write the best reply." data-constraints="Answer directly, set the right boundary, and move toward a meeting.">Reply to thread</button>
+          <button class="preset-button" type="button" data-asset-type="sales-collateral" data-prompt="Build sales collateral for On-the-Fly Labs aimed at AWS solutions architects running customer workshops." data-constraints="Use grounded AWS proof and keep the sections scan-friendly.">Sales collateral</button>
         </div>
 
         <div class="action-row">
@@ -102,11 +81,10 @@
       </form>
 
       <section class="output-panel">
-        <article class="example-card">
-          <p class="card-label">Selected pattern</p>
-          <h2 id="exampleLabel">Loading...</h2>
-          <p id="exampleUseWhen" class="example-use">Loading...</p>
-          <p id="exampleSource" class="example-source">Loading...</p>
+        <article id="workflowCard" class="example-card">
+          <p class="card-label">Current workflow</p>
+          <h2 id="workflowLabel">Loading...</h2>
+          <p id="workflowDescription" class="example-use">Loading...</p>
         </article>
 
         <article id="statusCard" class="status-card">

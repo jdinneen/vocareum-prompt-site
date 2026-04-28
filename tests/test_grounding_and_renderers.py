@@ -1,17 +1,16 @@
 from fastapi.testclient import TestClient
 
-from app.examples import EXAMPLE_PATTERNS
-from app.grounding import PROOF_POSTURES, SOURCE_TITLE, grounding_block
+from app.examples import DELIVERABLE_TYPES, EXAMPLE_PATTERNS
+from app.grounding import SOURCE_TITLE, grounding_block
 from app.main import (
     GenerateRequest,
     _build_user_prompt,
     _max_output_tokens,
-    _polish_one_pager_output,
-    _sanitize_named_proof_lines,
     _sanitize_proof_sections,
     app,
 )
-from app.renderers import parse_deck_text
+from app.renderers import parse_deck_text, parse_overview_text
+from app.validation import validate_output
 
 
 def test_build_user_prompt_includes_example_grounding_excerpt(monkeypatch):
@@ -38,27 +37,29 @@ def test_build_user_prompt_includes_example_grounding_excerpt(monkeypatch):
                     "text": "Overview collateral example excerpt",
                 },
             },
-            "default_public_stats": [],
-            "contextual_stats": [],
+            "truth_bundle": {
+                "default_public_stats": ["2M+ AWS learners"],
+                "approved_named_proof": ["AWS Academy"],
+            },
             "style_palette": {},
         },
     )
     req = GenerateRequest(
-        asset_type="one-pager",
+        asset_type="sales-collateral",
         audience="AWS solutions architects",
-        objective="Create an On-the-Fly Labs one-pager for AWS workshop teams.",
+        product="On-the-Fly Labs",
+        objective="Create AWS sales collateral for On-the-Fly Labs workshop teams.",
         extra_constraints="Use grounded proof only.",
-        example_pattern="aws-cosell-one-pager",
     )
 
     prompt = _build_user_prompt(req)
 
-    assert "Relevant live product catalog sections:" in prompt
+    assert "Workflow: sales-collateral" in prompt
     assert "Example Collateral: Vocareum_On_the_Fly_Labs_AWS_Co_Sell.pdf" in prompt
     assert "AWS collateral example excerpt" in prompt
 
 
-def test_grounding_block_uses_catalog_title(monkeypatch):
+def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
     monkeypatch.setattr(
         "app.grounding.load_grounding",
         lambda: {
@@ -68,21 +69,25 @@ def test_grounding_block_uses_catalog_title(monkeypatch):
                 "doc_url": "https://example.com/catalog",
             },
             "mode": "live",
-            "warnings": [],
+            "warnings": ["example warning"],
             "catalog_front_matter": "Catalog front matter",
             "catalog_sections": {},
             "email_sections": {},
             "collateral_examples": {},
-            "default_public_stats": ["5M+ learners served"],
-            "contextual_stats": [],
+            "truth_bundle": {
+                "default_public_stats": ["5M+ learners served"],
+                "approved_named_proof": ["AWS Academy"],
+            },
             "style_palette": {},
         },
     )
 
-    prompt = grounding_block("general overview")
+    prompt = grounding_block("general overview", "outbound-email")
 
     assert f"Document: {SOURCE_TITLE}" in prompt
-    assert "README / Doc Rules" not in prompt
+    assert "example warning" in prompt
+    assert "5M+ learners served" in prompt
+    assert "AWS Academy" in prompt
 
 
 def test_parse_deck_text_requires_exactly_six_slides():
@@ -105,6 +110,24 @@ def test_parse_deck_text_requires_exactly_six_slides():
     assert len(parsed["slides"]) == 6
 
 
+def test_parse_overview_text_uses_current_sales_collateral_sections():
+    text = (
+        "Headline: Test\n\n"
+        "Subhead: Grounded subhead\n\n"
+        "Core Capabilities:\n- Governed access\n- Budget controls\n\n"
+        "Best-Fit Buyers:\n- University AI teams\n- Platform operators\n\n"
+        "Proof: Approved paraphrased proof.\n\n"
+        "CTA: Schedule a review"
+    )
+
+    parsed = parse_overview_text(text)
+
+    assert parsed is not None
+    assert parsed["headline"] == "Test"
+    assert parsed["capabilities"] == ["Governed access", "Budget controls"]
+    assert parsed["buyers"] == ["University AI teams", "Platform operators"]
+
+
 def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch):
     monkeypatch.setattr(
         "app.main.load_grounding",
@@ -116,7 +139,10 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
             },
             "mode": "live",
             "warnings": ["example warning"],
-            "default_public_stats": ["5M+ learners served"],
+            "catalog_sections": {"AI Gateway": "section"},
+            "truth_bundle": {
+                "default_public_stats": ["5M+ learners served"],
+            },
             "style_palette": {"slate": "#2e3a41"},
         },
     )
@@ -126,63 +152,61 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["public_stats"] == ["5M+ learners served"]
+    assert payload["default_public_stats"] == ["5M+ learners served"]
     assert payload["grounding_mode"] == "live"
     assert payload["grounding_warnings"] == ["example warning"]
+    assert [item["id"] for item in payload["deliverable_types"]] == [
+        "outbound-email",
+        "reply-email",
+        "sales-collateral",
+    ]
 
 
-def test_sales_deck_brief_gets_higher_output_budget():
-    deck_req = GenerateRequest(asset_type="sales-deck-brief", objective="Deck objective")
-    email_req = GenerateRequest(asset_type="outreach-email", objective="Email objective")
+def test_workflow_output_budgets_match_current_contract():
+    collateral_req = GenerateRequest(asset_type="sales-collateral", objective="Collateral objective")
+    reply_req = GenerateRequest(asset_type="reply-email", objective="Reply objective")
+    outbound_req = GenerateRequest(asset_type="outbound-email", objective="Outbound objective")
 
-    assert _max_output_tokens(deck_req) == 2200
-    assert _max_output_tokens(email_req) == 1400
+    assert _max_output_tokens(collateral_req) == 1800
+    assert _max_output_tokens(reply_req) == 1600
+    assert _max_output_tokens(outbound_req) == 1200
 
 
-def test_proof_sanitizer_rewrites_direct_quotes_in_one_pager():
-    req = GenerateRequest(asset_type="one-pager", objective="One pager objective")
+def test_proof_sanitizer_rewrites_direct_quotes_in_sales_collateral():
     text = (
         "Headline: Test\n\n"
         "Proof: \"We've standardized on Vocareum for AWS enablement.\" — Jessica Gilmore, Senior Engagement Lead, AWS.\n\n"
         "CTA: Schedule a demo"
     )
-    sanitized = _sanitize_proof_sections(req, text)
+    sanitized = _sanitize_proof_sections(text)
     assert '"We' not in sanitized
     assert "Named public proof: Jessica Gilmore, Senior Engagement Lead, AWS" in sanitized
-    assert "do not use direct quotes" in sanitized
+    assert "Use paraphrased proof only." in sanitized
 
 
-def test_one_pager_polish_normalizes_stat_bar_and_audiences():
-    text = (
-        "Headline: Test\n\n"
-        "Stat Bar: 2M+ AWS learners. 7,000+ institutions and organizations. 5M+ total platform learners.\n\n"
-        "Who Uses This: AWS Solutions Architects, partner enablement teams, and workshop operators.\n\n"
-        "Proof: Vocareum supports AWS Academy.\n\n"
-        "CTA: Schedule a demo"
+def test_validation_rejects_unapproved_named_proof():
+    result = validate_output(
+        asset_type="sales-collateral",
+        text="Proof: The University of Michigan partnership validates the platform.",
+        support_text="Proof: AWS Academy validates the platform.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": ["AWS Academy"],
+            "allowed_reference_names": ["Vocareum"],
+        },
+        objective_text="Write grounded sales collateral.",
     )
-    polished = _polish_one_pager_output(text)
-    assert "Stat Bar: 2M+ AWS learners | 7,000+ institutions and organizations | 5M+ total platform learners" in polished
-    assert "Who Uses This: AWS Solutions Architects; partner enablement teams; workshop operators" in polished
+
+    assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
 
 
-def test_named_proof_sanitizer_rewrites_unapproved_named_reference():
-    req = GenerateRequest(asset_type="overview-collateral", objective="Overview objective")
-    text = (
-        "Headline: Test\n\n"
-        "Proof: Vocareum serves more than 7,000 institutions and organizations. "
-        "The University of Michigan partnership serves as named public deployment proof.\n\n"
-        "CTA: Book a review"
-    )
-    sanitized = _sanitize_named_proof_lines(req, text)
-    assert "University of Michigan" not in sanitized
-    assert "Use approved named public proof only" in sanitized
-    assert "AWS Academy" in sanitized
-
-
-def test_proof_postures_no_longer_expose_contextual_allowed():
-    posture_ids = [item["id"] for item in PROOF_POSTURES]
-    assert "contextual-allowed" not in posture_ids
-    assert posture_ids == ["strict-default", "named-proof-priority"]
+def test_deliverable_types_match_current_contract():
+    assert [item["id"] for item in DELIVERABLE_TYPES] == [
+        "outbound-email",
+        "reply-email",
+        "sales-collateral",
+    ]
 
 
 def test_collateral_examples_do_not_instruct_quotes():

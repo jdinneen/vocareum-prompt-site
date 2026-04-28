@@ -13,16 +13,11 @@ const sourceDate = document.getElementById("sourceDate");
 const metaNote = document.getElementById("metaNote");
 const assetType = document.getElementById("assetType");
 const productSelect = document.getElementById("productSelect");
-const examplePattern = document.getElementById("examplePattern");
-const audienceDoorSelect = document.getElementById("audienceDoorSelect");
 const audienceInput = document.getElementById("audienceInput");
-const proofPostureSelect = document.getElementById("proofPostureSelect");
-const ctaInput = document.getElementById("ctaInput");
 const promptInput = document.getElementById("promptInput");
 const constraintsInput = document.getElementById("constraintsInput");
-const exampleLabel = document.getElementById("exampleLabel");
-const exampleUseWhen = document.getElementById("exampleUseWhen");
-const exampleSource = document.getElementById("exampleSource");
+const workflowLabel = document.getElementById("workflowLabel");
+const workflowDescription = document.getElementById("workflowDescription");
 const statusTitle = document.getElementById("statusTitle");
 const statusBody = document.getElementById("statusBody");
 const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
@@ -33,10 +28,7 @@ const openPreviewButton = document.getElementById("openPreviewButton");
 
 let meta = {
   deliverable_types: [],
-  example_patterns: [],
   products: [],
-  audience_doors: [],
-  proof_postures: [],
   grounding_warnings: []
 };
 let currentRenderUrl = "";
@@ -64,11 +56,27 @@ function setRenderPreview(renderedHtml, renderedTitleText) {
   renderPanel.classList.remove("hidden");
 }
 
-function currentExamples() {
-  const selectedAsset = assetType.value;
-  return meta.example_patterns.filter((item) => {
-    return selectedAsset === "custom" || item.asset_types.includes(selectedAsset);
+function renderDeliverableOptions() {
+  assetType.innerHTML = "";
+  meta.deliverable_types.forEach((item) => {
+    const option = document.createElement("option");
+    option.value = item.id;
+    option.textContent = item.label;
+    assetType.appendChild(option);
   });
+  assetType.value = "outbound-email";
+  renderWorkflowCard();
+}
+
+function renderWorkflowCard() {
+  const selected = meta.deliverable_types.find((item) => item.id === assetType.value);
+  if (!selected) {
+    workflowLabel.textContent = "Workflow";
+    workflowDescription.textContent = "";
+    return;
+  }
+  workflowLabel.textContent = selected.label;
+  workflowDescription.textContent = selected.description;
 }
 
 function renderSelectOptions(selectEl, values, placeholder) {
@@ -85,56 +93,6 @@ function renderSelectOptions(selectEl, values, placeholder) {
   });
 }
 
-function renderProofPostureOptions() {
-  proofPostureSelect.innerHTML = "";
-  meta.proof_postures.forEach((item) => {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.label;
-    proofPostureSelect.appendChild(option);
-  });
-  proofPostureSelect.value = "strict-default";
-}
-
-function renderExampleOptions(preferredId) {
-  const examples = currentExamples();
-  examplePattern.innerHTML = "";
-
-  const autoOption = document.createElement("option");
-  autoOption.value = "";
-  autoOption.textContent = "Auto-select best pattern";
-  examplePattern.appendChild(autoOption);
-
-  examples.forEach((item) => {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.label;
-    examplePattern.appendChild(option);
-  });
-
-  if (preferredId && examples.some((item) => item.id === preferredId)) {
-    examplePattern.value = preferredId;
-  } else {
-    examplePattern.value = "";
-  }
-
-  renderExampleCard();
-}
-
-function renderExampleCard() {
-  const selected = meta.example_patterns.find((item) => item.id === examplePattern.value);
-  if (!selected) {
-    exampleLabel.textContent = "Auto-select best pattern";
-    exampleUseWhen.textContent = "The backend will pick the closest approved email or collateral pattern for this deliverable.";
-    exampleSource.textContent = "Source: approved example library";
-    return;
-  }
-
-  exampleLabel.textContent = selected.label;
-  exampleUseWhen.textContent = selected.use_when;
-  exampleSource.textContent = `Source: ${selected.source}`;
-}
-
 function renderGroundingStatus(mode, warnings, source) {
   const isLive = mode === "live";
   groundingMode.textContent = isLive ? "live grounding" : "fallback grounding";
@@ -142,25 +100,13 @@ function renderGroundingStatus(mode, warnings, source) {
   if (warnings && warnings.length) {
     statusBody.textContent = warnings.join(" ");
   } else if (isLive) {
-    statusBody.textContent = `Using the live catalog and linked Drive materials from ${source.last_reviewed}.`;
+    statusBody.textContent = `Using the live catalog and linked approved materials from ${source.last_reviewed}.`;
   } else {
-    statusBody.textContent = "Live sources are unavailable, so the app is using a local snapshot.";
+    statusBody.textContent = "Live sources are unavailable, so the app is using a local fallback snapshot.";
   }
   metaNote.textContent = isLive
-    ? "Gemini key stays server-side. Output is constrained to the live catalog doc plus the approved email and collateral examples in Drive."
-    : "Gemini key stays server-side. Live doc reads are unavailable, so output is constrained to the local fallback snapshot until live grounding recovers.";
-}
-
-function renderDeliverableOptions() {
-  assetType.innerHTML = "";
-  meta.deliverable_types.forEach((item) => {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.label;
-    assetType.appendChild(option);
-  });
-  assetType.value = "outreach-email";
-  renderExampleOptions("");
+    ? "Live catalog grounding with deterministic validation before output is returned."
+    : "Fallback grounding is active. Generation still validates output, but live sources are currently unavailable.";
 }
 
 async function loadMeta() {
@@ -175,9 +121,7 @@ async function loadMeta() {
   groundingMode.textContent = meta.grounding_mode;
   sourceDate.textContent = meta.source.last_reviewed;
   renderDeliverableOptions();
-  renderSelectOptions(productSelect, meta.products.filter((item) => !item.startsWith("All ")), "Auto-detect product");
-  renderSelectOptions(audienceDoorSelect, meta.audience_doors, "No audience door");
-  renderProofPostureOptions();
+  renderSelectOptions(productSelect, meta.products, "Auto-detect product");
   renderGroundingStatus(meta.grounding_mode, meta.grounding_warnings, meta.source);
 
   setLog([
@@ -185,25 +129,20 @@ async function loadMeta() {
     `model: ${meta.model}`,
     `grounding: ${meta.grounding_mode}`,
     `catalog: ${meta.source.last_reviewed}`,
-    `patterns: ${meta.example_patterns.length}`
+    `workflows: ${meta.deliverable_types.length}`
   ]);
 }
 
 assetType.addEventListener("change", () => {
-  renderExampleOptions("");
-});
-
-examplePattern.addEventListener("change", () => {
-  renderExampleCard();
+  renderWorkflowCard();
 });
 
 presetButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    assetType.value = button.dataset.assetType || "custom";
-    renderExampleOptions(button.dataset.examplePattern || "");
+    assetType.value = button.dataset.assetType || "outbound-email";
+    renderWorkflowCard();
     promptInput.value = button.dataset.prompt || "";
     constraintsInput.value = button.dataset.constraints || "";
-    ctaInput.value = "";
     audienceInput.focus();
   });
 });
@@ -216,11 +155,9 @@ form.addEventListener("submit", async (event) => {
   outputBox.textContent = "Generating...";
   setLog([
     "request started",
-    `asset type: ${assetType.value}`,
+    `workflow: ${assetType.value}`,
     `product: ${productSelect.value || "auto"}`,
-    `audience door: ${audienceDoorSelect.value || "none"}`,
-    `proof posture: ${proofPostureSelect.value}`,
-    `example pattern: ${examplePattern.value || "auto"}`,
+    `audience: ${audienceInput.value.trim() || "none"}`,
     `prompt chars: ${promptInput.value.trim().length}`,
     "calling backend..."
   ]);
@@ -229,13 +166,9 @@ form.addEventListener("submit", async (event) => {
   const body = {
     asset_type: assetType.value,
     product: productSelect.value,
-    audience_door: audienceDoorSelect.value,
     audience: audienceInput.value.trim(),
-    proof_posture: proofPostureSelect.value,
-    cta: ctaInput.value.trim(),
     objective: promptInput.value.trim(),
-    extra_constraints: constraintsInput.value.trim(),
-    example_pattern: examplePattern.value
+    extra_constraints: constraintsInput.value.trim()
   };
 
   try {
@@ -249,7 +182,12 @@ form.addEventListener("submit", async (event) => {
 
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(payload.detail || "Request failed.");
+      const detail = payload.detail || {};
+      const message = typeof detail === "string"
+        ? detail
+        : detail.message || "Request failed.";
+      const violations = Array.isArray(detail.violations) ? detail.violations : [];
+      throw new Error([message].concat(violations).join(" "));
     }
 
     outputBox.textContent = payload.output;
@@ -258,40 +196,20 @@ form.addEventListener("submit", async (event) => {
     });
     if (payload.rendered_html) {
       setRenderPreview(payload.rendered_html, payload.rendered_title);
-    } else if (["one-pager", "overview-collateral", "sales-deck-brief"].includes(assetType.value)) {
-      setLog([
-        "request complete",
-        `request id: ${payload.request_id}`,
-        `asset type: ${assetType.value}`,
-        `product: ${productSelect.value || "auto"}`,
-        `audience door: ${audienceDoorSelect.value || "none"}`,
-        `proof posture: ${proofPostureSelect.value}`,
-        `example pattern: ${examplePattern.value || "auto"}`,
-        `grounding: ${payload.grounding_mode}`,
-        `model: ${payload.model}`,
-        `server duration: ${payload.duration_ms} ms`,
-        `browser total: ${Math.round(performance.now() - startedAt)} ms`,
-        "preview note: renderer could not parse the collateral sections"
-      ]);
     }
     modelName.textContent = payload.model;
     sourceDate.textContent = payload.source_last_reviewed;
     groundingMode.textContent = payload.grounding_mode;
-    if (!(["one-pager", "overview-collateral", "sales-deck-brief"].includes(assetType.value) && !payload.rendered_html)) {
-      setLog([
-        "request complete",
-        `request id: ${payload.request_id}`,
-        `asset type: ${assetType.value}`,
-        `product: ${productSelect.value || "auto"}`,
-        `audience door: ${audienceDoorSelect.value || "none"}`,
-        `proof posture: ${proofPostureSelect.value}`,
-        `example pattern: ${examplePattern.value || "auto"}`,
-        `grounding: ${payload.grounding_mode}`,
-        `model: ${payload.model}`,
-        `server duration: ${payload.duration_ms} ms`,
-        `browser total: ${Math.round(performance.now() - startedAt)} ms`
-      ]);
-    }
+    setLog([
+      "request complete",
+      `request id: ${payload.request_id}`,
+      `workflow: ${assetType.value}`,
+      `product: ${productSelect.value || "auto"}`,
+      `grounding: ${payload.grounding_mode}`,
+      `model: ${payload.model}`,
+      `server duration: ${payload.duration_ms} ms`,
+      `browser total: ${Math.round(performance.now() - startedAt)} ms`
+    ]);
   } catch (error) {
     outputBox.textContent = `Error: ${error.message}`;
     setLog([

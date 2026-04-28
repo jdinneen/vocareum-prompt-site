@@ -1,0 +1,119 @@
+{
+  "generated_at": "2026-04-28T00:02:52.270864+00:00",
+  "source_files": [
+    "AGENTS.md",
+    "core/shared_rules/email/approved_numeric_claims.json",
+    "core/shared_rules/email/approved_links.json"
+  ],
+  "default_public_stats": [
+    "2M+ AWS learners",
+    "1M+ annual unique learners",
+    "5M+ total platform learners",
+    "7,000+ institutions and organizations"
+  ],
+  "approved_numeric_claims": [
+    "Tuesday, April 14",
+    "30-minute",
+    "5:00 PM",
+    "5:30-6:00 PM",
+    "6:00 PM onward",
+    "6:00 PM",
+    "4-5 prompts",
+    "80k+ graded responses with feedback",
+    "16.9k tutor questions",
+    "35.6% to 11.4% vs prior cohort",
+    "2M+",
+    "5M+",
+    "7,000+",
+    "1M+",
+    "50M+",
+    "50 million+",
+    "$10",
+    "$10 per monthly active user",
+    "$10/monthly active user",
+    "$2.4 million",
+    "20,000 students",
+    "SOC 2 Type II",
+    "FERPA",
+    "GDPR"
+  ],
+  "approved_named_proof": [
+    "AWS Academy",
+    "Databricks Academy",
+    "DeepLearning.AI",
+    "JPMorgan Chase",
+    "Carnegie Mellon",
+    "Georgia Tech",
+    "UC San Diego"
+  ],
+  "approved_links": {
+    "Jon Dinneen": "https://www.linkedin.com/in/jondinneen/",
+    "Udacity": "https://www.vocareum.com/udacity/",
+    "Databricks": "https://www.databricks.com/blog/boost-your-data-ai-skills-our-latest-offerings-databricks-academy-labs-and-blended-learning",
+    "AWS Academy": "https://www.vocareum.com/aws-academy/",
+    "UC San Diego post": "https://gpsnews.ucsd.edu/ai-math-tutor/",
+    "ASU+GSV Sesh RSVP Form": "https://docs.google.com/forms/d/e/1FAIpQLScUQwGxD1zk0l25r8q5h-ftUhkp10CgAe1H4VDpYeBnwHRopQ/viewform"
+  },
+  "allowed_reference_names": [
+    "Vocareum",
+    "AI Gateway",
+    "AI Notebook",
+    "AI Compass",
+    "Cloud Labs",
+    "Developer Workspaces",
+    "Virtual Desktop",
+    "Agentic AI Labs",
+    "On-the-Fly Labs",
+    "Simulations",
+    "Databases",
+    "GPU & CPU Compute",
+    "Cyber Ranges",
+    "Platform Enablement Labs",
+    "OpenAI",
+    "Anthropic",
+    "Google Gemini",
+    "AWS Bedrock",
+    "Azure OpenAI",
+    "Claude Code",
+    "GitHub Copilot",
+    "Amazon Q",
+    "OpenAI Codex",
+    "AWS",
+    "Azure",
+    "GCP",
+    "Databricks",
+    "SOC 2 Type II",
+    "FERPA",
+    "GDPR",
+    "WCAG 2.1 AA"
+  ],
+  "supported_cloud_platforms": [
+    "AWS",
+    "Azure",
+    "GCP",
+    "Databricks"
+  ],
+  "approved_compliance": [
+    "SOC 2 Type II",
+    "FERPA",
+    "GDPR"
+  ],
+  "approved_model_providers": [
+    "OpenAI",
+    "Anthropic",
+    "Google Gemini",
+    "AWS Bedrock",
+    "Azure OpenAI"
+  ],
+  "approved_agentic_tools": [
+    "Claude Code",
+    "GitHub Copilot",
+    "Amazon Q",
+    "OpenAI Codex"
+  ],
+  "supported_workflows": [
+    "outbound-email",
+    "reply-email",
+    "sales-collateral"
+  ]
+}
