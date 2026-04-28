@@ -311,6 +311,8 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
         "outbound-email",
         "reply-email",
         "sales-collateral",
+        "one-pager",
+        "sales-deck-brief",
     ]
 
 
@@ -443,6 +445,8 @@ def test_deliverable_types_match_current_contract():
         "outbound-email",
         "reply-email",
         "sales-collateral",
+        "one-pager",
+        "sales-deck-brief",
     ]
 
 
@@ -453,3 +457,61 @@ def test_collateral_examples_do_not_instruct_quotes():
         for item in collateral_examples
     ).lower()
     assert "quote" not in combined
+
+
+def test_grounded_answer_allows_paraphrased_product_description():
+    """Regression: grounded-answer about On-the-Fly Labs should not fail
+    when the model paraphrases catalog language with claim verbs."""
+    support_text = (
+        "On-the-Fly Labs\n"
+        "AI-generated hands-on labs created rapidly for a specific learner, cohort, workshop, or event.\n"
+        "AI-assisted lab generation from a learning objective, audience description, and tooling context.\n"
+        "Structured output including instructions, starter code or templates, validation criteria, "
+        "and environment configuration.\n"
+        "Deployable on standard Vocareum infrastructure with full governance controls.\n"
+        "Compatible with AI Gateway for labs that require governed model access."
+    )
+    truth_bundle = {
+        "default_public_stats": ["2M+ AWS learners"],
+        "approved_named_proof": ["AWS Academy"],
+        "approved_numeric_claims": [],
+    }
+    # Typical LLM paraphrase of catalog content
+    output = (
+        "On-the-Fly Labs provides AI-assisted generation of hands-on lab environments "
+        "tailored to a specific learning objective, cohort, or workshop context. "
+        "The platform delivers structured labs including instructions, starter code, "
+        "and validation criteria, all deployable on governed Vocareum cloud infrastructure."
+    )
+    result = validate_output(
+        asset_type="grounded-answer",
+        text=output,
+        support_text=support_text,
+        truth_bundle=truth_bundle,
+        objective_text="tell me about the vocareum on the fly labs product",
+    )
+    assert result.ok, f"Unexpected validation issues: {[i.detail for i in result.issues]}"
+
+
+def test_outbound_email_still_catches_ungrounded_claims():
+    """Ensure outbound-email mode still flags sentences with weak grounding overlap."""
+    support_text = "On-the-Fly Labs\nAI-generated hands-on labs."
+    truth_bundle = {
+        "default_public_stats": [],
+        "approved_named_proof": [],
+        "approved_numeric_claims": [],
+    }
+    output = (
+        "Subject: Exciting news\n\n"
+        "Vocareum provides enterprise blockchain orchestration with quantum-ready "
+        "containerized microservice federation across hybrid sovereign meshes."
+    )
+    result = validate_output(
+        asset_type="outbound-email",
+        text=output,
+        support_text=support_text,
+        truth_bundle=truth_bundle,
+        objective_text="write an email about blockchain",
+    )
+    assert not result.ok
+    assert any(issue.code == "claims_not_in_grounding" for issue in result.issues)

@@ -16,8 +16,18 @@ DELIVERABLE_TYPES = [
     },
     {
         "id": "sales-collateral",
-        "label": "Sales collateral builder",
-        "description": "Grounded sales collateral copy using the catalog plus example collateral in Drive.",
+        "label": "Overview collateral",
+        "description": "Structured overview with headline, capabilities, buyers, proof, and CTA.",
+    },
+    {
+        "id": "one-pager",
+        "label": "One-pager",
+        "description": "Full one-pager with hero, stat bar, problem, how-it-works steps, buyers, proof, and CTA.",
+    },
+    {
+        "id": "sales-deck-brief",
+        "label": "6-slide deck",
+        "description": "Six-slide presentation outline with structured bullets per slide.",
     },
 ]
 
@@ -257,7 +267,7 @@ def resolve_example(asset_type: str, objective: str) -> dict | None:
             return example_map()["partner-case-study"]
         return example_map()["short-demo-follow-up"]
 
-    if asset_type == "sales-collateral":
+    if asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}:
         if any(term in lowered for term in ("aws", "co-sell", "on-the-fly")):
             return example_map()["aws-cosell-one-pager"]
         if any(term in lowered for term in ("method", "workflow", "operating model")):

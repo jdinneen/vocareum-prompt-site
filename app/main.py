@@ -22,7 +22,7 @@ if not logging.getLogger().handlers:
 
 
 class GenerateRequest(BaseModel):
-    asset_type: Literal["grounded-answer", "outbound-email", "reply-email", "sales-collateral"] = Field(default="outbound-email")
+    asset_type: Literal["grounded-answer", "outbound-email", "reply-email", "sales-collateral", "one-pager", "sales-deck-brief"] = Field(default="outbound-email")
     audience: str = Field(default="", max_length=200)
     product: str = Field(default="", max_length=120)
     objective: str = Field(..., min_length=8, max_length=8000)
@@ -105,6 +105,28 @@ def _output_format_instructions(req: GenerateRequest) -> str:
             "Infer the actual ask from that thread, answer directly, and return only the reply. Put the subject line first as "
             "`Subject: ...`, then a blank line, then the email body. If the thread contains more than one ask, answer all of them in the reply."
         )
+    if req.asset_type == "one-pager":
+        return (
+            "Return a structured one-pager with these labeled sections in order: "
+            "Headline, Subhead, Stat Bar, Problem, How It Works, Who Uses This, Proof, CTA. "
+            "Put each section label on its own line followed by the content. "
+            "Stat Bar should be 3-4 items separated by semicolons, each as 'value: label' (e.g. '2M+: AWS learners'). "
+            "How It Works should use numbered steps (1. Title. Detail). "
+            "Who Uses This should be a comma-separated list of buyer roles. "
+            "Use concise scan-friendly copy. Use only grounded proof. Proof must be paraphrased."
+        )
+    if req.asset_type == "sales-deck-brief":
+        return (
+            "Return a 6-slide presentation outline. Label each slide as 'Slide N: Title' on its own line, "
+            "followed by 3-5 bullet points per slide. Suggested slide flow: "
+            "Slide 1: Opening hook with buyer context. "
+            "Slide 2: Problem or market challenge. "
+            "Slide 3: Solution overview. "
+            "Slide 4: Core capabilities or differentiators. "
+            "Slide 5: Proof and scale. "
+            "Slide 6: Call to action and next steps. "
+            "Use concise bullet language. Use only grounded proof."
+        )
     return (
         "Return structured sales collateral copy with these labeled sections in order: "
         "Headline, Subhead, Core Capabilities, Best-Fit Buyers, Proof, CTA. "
@@ -116,8 +138,10 @@ def _output_format_instructions(req: GenerateRequest) -> str:
 def _max_output_tokens(req: GenerateRequest) -> int:
     if req.asset_type == "grounded-answer":
         return 1400
-    if req.asset_type == "sales-collateral":
+    if req.asset_type in {"sales-collateral", "one-pager"}:
         return 1800
+    if req.asset_type == "sales-deck-brief":
+        return 2200
     if req.asset_type == "reply-email":
         return 1600
     return 1200
@@ -162,14 +186,19 @@ def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
         if not any(term in lower for term in ("thread", "prospect:", "customer:", "email:", "re:", "fwd:", "need:")):
             missing.append("the actual incoming email or thread context")
         examples.append("Thread: Hi Jon, can Vocareum provide ChatGPT access for students, and would next Tuesday work for a follow-up? Need: write the best reply.")
-    elif req.asset_type == "sales-collateral":
+    elif req.asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}:
         if not req.product:
             missing.append("which product or surface the collateral is for")
         if not req.audience and not any(term in lower for term in ("buyer", "audience", "architect", "leader", "team", "platform")):
             missing.append("who the collateral is for")
-        if not any(term in lower for term in ("one-pager", "collateral", "overview", "sales", "asset", "build")):
-            missing.append("what asset you want built")
-        examples.append("Build sales collateral for On-the-Fly Labs aimed at AWS solutions architects running customer workshops.")
+        if req.asset_type == "one-pager":
+            examples.append("Build a one-pager for On-the-Fly Labs aimed at AWS solutions architects running customer workshops.")
+        elif req.asset_type == "sales-deck-brief":
+            examples.append("Build a 6-slide deck for AI Gateway aimed at university CIOs evaluating governed AI access.")
+        else:
+            if not any(term in lower for term in ("one-pager", "collateral", "overview", "sales", "asset", "build")):
+                missing.append("what asset you want built")
+            examples.append("Build sales collateral for On-the-Fly Labs aimed at AWS solutions architects running customer workshops.")
 
     if not missing:
         return None
@@ -326,9 +355,12 @@ def _post_process(req: GenerateRequest, text: str) -> str:
     cleaned = _normalize_approved_stats(cleaned)
     if req.asset_type == "grounded-answer":
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    elif req.asset_type == "sales-collateral":
+    elif req.asset_type in {"sales-collateral", "one-pager"}:
         cleaned = _sanitize_proof_sections(cleaned)
-        cleaned = _normalize_sales_collateral(cleaned)
+        if req.asset_type == "sales-collateral":
+            cleaned = _normalize_sales_collateral(cleaned)
+    elif req.asset_type == "sales-deck-brief":
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     elif req.asset_type == "outbound-email":
         cleaned = _ensure_outbound_next_step(req, cleaned)
     elif req.asset_type == "reply-email":
@@ -427,9 +459,7 @@ def _call_model(req: GenerateRequest, request_id: str, correction_instructions: 
         ),
     )
     raw_text = (response.text or "").strip()
-    if req.asset_type == "grounded-answer":
-        text = raw_text
-    elif req.asset_type == "sales-collateral":
+    if req.asset_type in {"grounded-answer", "sales-collateral", "one-pager", "sales-deck-brief"}:
         text = raw_text
     elif matched_products(req.objective) or (req.product and matched_products(req.product)):
         text = _normalize_product_answer(raw_text)
@@ -515,8 +545,25 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
         }
 
     has_subject = output.strip().startswith("Subject:")
-    workflow_score = 5 if has_subject or req.asset_type == "sales-collateral" else 2
-    if req.asset_type == "sales-collateral":
+    is_collateral = req.asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}
+    workflow_score = 5 if has_subject or is_collateral else 2
+    if req.asset_type == "one-pager":
+        required_labels = ["Headline:", "Subhead:", "Stat Bar:", "Problem:", "How It Works:", "Who Uses This:", "Proof:", "CTA:"]
+        # Accept "How It Works" without colon as well
+        present = sum(1 for label in required_labels if label in output or label.rstrip(":") + "\n" in output)
+        workflow_score = max(1, min(5, round(present * 5 / len(required_labels))))
+        if present >= len(required_labels) - 1:
+            strengths.append("One-pager structure is complete.")
+        else:
+            improvements.append("Complete all required one-pager sections.")
+    elif req.asset_type == "sales-deck-brief":
+        slide_count = len(re.findall(r"(?m)^Slide\s+\d+:", output))
+        workflow_score = 5 if slide_count == 6 else max(1, min(5, slide_count))
+        if slide_count == 6:
+            strengths.append("Deck has all 6 slides.")
+        else:
+            improvements.append(f"Expected 6 slides, found {slide_count}.")
+    elif req.asset_type == "sales-collateral":
         required_labels = ["Headline:", "Subhead:", "Core Capabilities:", "Best-Fit Buyers:", "Proof:", "CTA:"]
         present = sum(1 for label in required_labels if label in output)
         workflow_score = max(1, min(5, present))

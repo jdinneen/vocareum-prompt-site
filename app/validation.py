@@ -77,22 +77,12 @@ STOPWORDS = {
     "built",
     "buyer",
     "buyers",
-    "cloud",
-    "course",
-    "courses",
     "customer",
     "customers",
     "delivery",
     "email",
     "from",
-    "governed",
     "into",
-    "labs",
-    "learning",
-    "platform",
-    "product",
-    "program",
-    "programs",
     "reply",
     "sales",
     "surface",
@@ -227,6 +217,10 @@ def validate_output(
                 )
             )
 
+    # Grounded-answer mode paraphrases catalog content to answer questions,
+    # so require lower token overlap than marketing copy workflows.
+    is_answer_mode = asset_type == "grounded-answer"
+
     for sentence in _sentences(text):
         if _proof_context(sentence):
             for candidate in _extract_name_candidates(sentence):
@@ -244,7 +238,10 @@ def validate_output(
         if len(tokens) < 3:
             continue
         overlap = tokens & support_tokens
-        min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
+        if is_answer_mode:
+            min_overlap = 1 if len(tokens) <= 5 else max(2, (len(tokens) + 2) // 3)
+        else:
+            min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
         if len(overlap) < min_overlap:
             issues.append(
                 ValidationIssue(

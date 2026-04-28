@@ -473,7 +473,7 @@ def selected_grounding_text(
         if email_block:
             sections.append(email_block)
 
-    if asset_type == "sales-collateral":
+    if asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}:
         product_matches = matched_products(query_text)
         product_hint = product_matches[0] if product_matches else product
         collateral_block = _collateral_example_block(example_id, data, query_text, product_hint)
