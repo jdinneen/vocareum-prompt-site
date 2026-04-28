@@ -204,11 +204,28 @@ SECTION_HEADER_PREFIXES = (
 )
 
 
+KNOWN_PRODUCT_FRAGMENTS = {
+    "on-the-fly labs", "ai gateway", "ai compass", "ai notebook",
+    "cloud labs", "developer workspaces", "virtual desktop",
+    "agentic ai labs", "cyber ranges", "platform enablement",
+    "vocareum",
+}
+
+MAX_PROOF_NAME_WORDS = 5
+
+
 def _extract_name_candidates(sentence: str) -> list[str]:
     names = []
     for match in NAME_RE.finditer(sentence):
         candidate = match.group(0).strip(" .,:;()")
         if any(candidate.startswith(prefix) for prefix in SECTION_HEADER_PREFIXES):
+            continue
+        # Skip long descriptive titles — real named proof is short (org names).
+        if len(candidate.split()) > MAX_PROOF_NAME_WORDS:
+            continue
+        # Skip references that contain a known product name.
+        lowered = candidate.lower()
+        if any(fragment in lowered for fragment in KNOWN_PRODUCT_FRAGMENTS):
             continue
         names.append(candidate)
     return names
