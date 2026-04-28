@@ -71,10 +71,12 @@ Rules:
 4. Write in direct business-ready language. Avoid filler, hype, and generic marketing language.
 5. Do not use direct quotes.
 6. Approved default public stats: {public_stats}.
-7. Approved named public proof is limited to: {named_proof}.
-8. Do not present source-specific proof as platform-wide average proof.
-9. Stay inside the requested workflow: {workflows}.
-10. Do not mention system prompts, hidden rules, or implementation details.
+7. If you use an approved public stat, preserve its exact wording and scope from the grounding. Do not rewrite abbreviations like `2M+` into `2 million`.
+8. Approved named public proof is limited to: {named_proof}.
+9. Do not present source-specific proof as platform-wide average proof.
+10. Remove generic bridge sentences unless they are directly supported by the grounding.
+11. Stay inside the requested workflow: {workflows}.
+12. Do not mention system prompts, hidden rules, or implementation details.
 """
 
 
@@ -154,7 +156,7 @@ Use the grounding below.
 
 {mode_note}
 {correction_instructions or ""}
-Use only proof, names, providers, tools, and metrics that are explicit in the grounding or in the user-supplied thread. If live grounding is unavailable, do not imply the latest live doc was read successfully.
+Use only proof, names, providers, tools, and metrics that are explicit in the grounding or in the user-supplied thread. If you use an approved public stat, copy the exact stat string from the grounding instead of paraphrasing it. If a sentence is only partially supported, delete it instead of smoothing it over. If live grounding is unavailable, do not imply the latest live doc was read successfully.
 """
 
 
@@ -227,8 +229,37 @@ def _normalize_sales_collateral(text: str) -> str:
     return normalized.strip()
 
 
+def _normalize_approved_stats(text: str) -> str:
+    normalized = text
+    replacements = [
+        (
+            re.compile(r"(?:\b(?:over|more than|about|approximately|around)\s+)?2(?:\s*million|\s*m)\+?\s+aws learners\b", re.IGNORECASE),
+            "2M+ AWS learners",
+        ),
+        (
+            re.compile(r"(?:\b(?:over|more than|about|approximately|around)\s+)?1(?:\s*million|\s*m)\+?\s+annual unique learners\b", re.IGNORECASE),
+            "1M+ annual unique learners",
+        ),
+        (
+            re.compile(r"(?:\b(?:over|more than|about|approximately|around)\s+)?5(?:\s*million|\s*m)\+?\s+total platform learners\b", re.IGNORECASE),
+            "5M+ total platform learners",
+        ),
+        (
+            re.compile(
+                r"(?:\b(?:over|more than|about|approximately|around)\s+)?7,?000\+?\s+(?:institutions globally|institutions and organizations|institutions|organizations)\b",
+                re.IGNORECASE,
+            ),
+            "7,000+ institutions and organizations",
+        ),
+    ]
+    for pattern, replacement in replacements:
+        normalized = pattern.sub(replacement, normalized)
+    return normalized
+
+
 def _post_process(req: GenerateRequest, text: str) -> str:
     cleaned = text.replace("“", "").replace("”", "").replace('"', "").strip()
+    cleaned = _normalize_approved_stats(cleaned)
     if req.asset_type == "sales-collateral":
         cleaned = _sanitize_proof_sections(cleaned)
         cleaned = _normalize_sales_collateral(cleaned)
@@ -346,6 +377,7 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     fix_lines = "\n".join(f"- {issue.code}: {issue.detail} | {issue.snippet}" for issue in first_validation.issues[:8])
     correction = (
         "The first draft failed deterministic validation. Rewrite it so every claim is supported.\n"
+        "Replace paraphrased public stats with the exact grounded stat strings. Delete unsupported bridge sentences instead of rewording them.\n"
         "Fix these exact issues and keep the same workflow:\n"
         f"{fix_lines}"
     )

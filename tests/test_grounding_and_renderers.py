@@ -305,6 +305,20 @@ def test_validation_allows_short_grounded_claim_with_one_meaningful_overlap():
     assert result.issues == []
 
 
+def test_post_process_restores_governed_public_stat_strings():
+    req = GenerateRequest(asset_type="outbound-email", objective="Outbound objective")
+    text = (
+        "Vocareum supports over 2 million AWS learners and 7,000 institutions globally. "
+        "The platform also serves 5 million total platform learners."
+    )
+
+    processed = _post_process(req, text)
+
+    assert "2M+ AWS learners" in processed
+    assert "7,000+ institutions and organizations" in processed
+    assert "5M+ total platform learners" in processed
+
+
 def test_deliverable_types_match_current_contract():
     assert [item["id"] for item in DELIVERABLE_TYPES] == [
         "outbound-email",
