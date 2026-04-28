@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>mktg agent</title>
+  <title>Vocareum Grounded Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -11,147 +11,39 @@
 </head>
 <body>
   <main class="page-shell">
-    <section class="hero-panel">
-      <div class="hero-copy">
-        <p class="eyebrow">Vocareum messaging engine</p>
-        <h1>mktg agent</h1>
-        <p class="lede">Three jobs only: outbound email, reply to an email thread, and sales collateral grounded in the live catalog plus approved examples.</p>
-      </div>
-      <div class="hero-meta">
-        <p class="meta-title">Live config</p>
-        <p class="meta-line">
-          <span id="modelName">Loading...</span>
-          <span class="dot">•</span>
-          <span id="groundingMode">Loading...</span>
-          <span class="dot">•</span>
-          <span id="sourceDate">Loading...</span>
-        </p>
-        <p class="meta-note" id="metaNote">Live catalog grounding with deterministic validation before output is returned.</p>
-      </div>
+    <section class="hero">
+      <p class="eyebrow">Vocareum Grounded Assistant</p>
+      <h1>Ask for anything grounded in the catalog.</h1>
+      <p class="lede">Ask a question, request copy, or paste a rough note. The response stays inside supported Vocareum source material.</p>
+      <p id="sourceNote" class="source-note">Loading source status...</p>
     </section>
 
     <section class="workspace">
-      <form id="promptForm" class="control-panel">
-        <div class="field">
-          <label for="assetType">Workflow</label>
-          <select id="assetType" name="assetType"></select>
-        </div>
-
-        <div class="field">
-          <label for="productSelect">Product / Surface</label>
-          <select id="productSelect" name="productSelect"></select>
-        </div>
-
-        <div class="field">
-          <label for="audienceInput">Audience</label>
-          <input id="audienceInput" name="audienceInput" type="text" placeholder="Optional. Example: AWS partner enablement buyers">
-        </div>
-
-        <div class="field field-wide">
-          <label for="promptInput">Brief or pasted thread</label>
+      <form id="promptForm" class="prompt-panel">
+        <label class="field" for="promptInput">
+          <span>Your prompt</span>
           <textarea
             id="promptInput"
             name="promptInput"
-            rows="9"
-            placeholder="For outbound email: describe the person, product angle, and ask. For reply-email: paste the incoming thread and say what kind of reply you want. For sales collateral: describe the asset you need."
+            rows="12"
+            placeholder="Example: Explain AI Gateway for a university CIO in three short paragraphs, focusing on governed AI access for students and faculty."
             required
           ></textarea>
-        </div>
-
-        <div class="field field-wide">
-          <label for="constraintsInput">Constraints</label>
-          <textarea
-            id="constraintsInput"
-            name="constraintsInput"
-            rows="4"
-            placeholder="Optional. Example: Keep it short. Emphasize governance and cost control. Avoid academic framing."
-          ></textarea>
-        </div>
-
-        <div class="preset-strip">
-          <button class="preset-button" type="button" data-asset-type="outbound-email" data-prompt="Write an outbound email to a university buyer asking whether Vocareum can provide governed model access for students in AI coursework." data-constraints="Keep it concise. Clarify the boundary around consumer logins.">Outbound email</button>
-          <button class="preset-button" type="button" data-asset-type="reply-email" data-prompt="Prospect thread:\nHi Jon,\nThis was helpful. Can Vocareum provide ChatGPT access for students directly, or would they need API-based access? Also, would next Tuesday or Wednesday work for a follow-up?\n\nNeed: write the best reply." data-constraints="Answer directly, set the right boundary, and move toward a meeting.">Reply to thread</button>
-          <button class="preset-button" type="button" data-asset-type="sales-collateral" data-prompt="Build sales collateral for On-the-Fly Labs aimed at AWS solutions architects running customer workshops." data-constraints="Use grounded AWS proof and keep the sections scan-friendly.">Sales collateral</button>
-        </div>
+        </label>
 
         <div class="action-row">
-          <button id="submitButton" type="submit">Generate</button>
-          <button id="copyButton" type="button">Copy output</button>
+          <button id="submitButton" class="primary-button" type="submit">Ask</button>
+          <button id="copyButton" class="secondary-button" type="button">Copy</button>
         </div>
       </form>
 
-      <section class="output-panel">
-        <article id="workflowCard" class="example-card">
-          <p class="card-label">Current workflow</p>
-          <h2 id="workflowLabel">Loading...</h2>
-          <p id="workflowDescription" class="example-use">Loading...</p>
-        </article>
-
-        <article id="statusCard" class="status-card">
-          <p class="card-label">Grounding status</p>
-          <h2 id="statusTitle">Loading...</h2>
-          <p id="statusBody" class="status-body">Loading...</p>
-        </article>
-
-        <section id="evalPanel" class="eval-panel">
-          <div class="eval-head">
-            <div>
-              <p class="card-label">Testing Environment</p>
-              <h2>Rate and Improve</h2>
-            </div>
-            <div id="overallScore" class="overall-score">No output yet</div>
-          </div>
-
-          <div id="scoreGrid" class="score-grid"></div>
-
-          <div class="eval-columns">
-            <div>
-              <p class="mini-label">Strengths</p>
-              <ul id="strengthList" class="eval-list"></ul>
-            </div>
-            <div>
-              <p class="mini-label">Needs work</p>
-              <ul id="improvementList" class="eval-list"></ul>
-            </div>
-          </div>
-
-          <div id="blockerBox" class="blocker-box hidden"></div>
-
-          <div class="field">
-            <label for="ratingSelect">Your rating</label>
-            <select id="ratingSelect" name="ratingSelect">
-              <option value="5">5 - strong</option>
-              <option value="4">4 - usable</option>
-              <option value="3" selected>3 - mixed</option>
-              <option value="2">2 - weak</option>
-              <option value="1">1 - bad</option>
-            </select>
-          </div>
-
-          <div class="field">
-            <label for="improvementNotes">Improvement notes</label>
-            <textarea id="improvementNotes" rows="4" placeholder="Example: too generic, wrong person, missing ask, weak CTA, not specific enough to AWS."></textarea>
-          </div>
-
-          <div class="action-row eval-actions">
-            <button id="improveButton" type="button">Improve Output</button>
-            <button id="rerunButton" type="button">Re-run Test</button>
-          </div>
-        </section>
-
-        <section id="renderPanel" class="render-panel hidden">
-          <div class="render-panel-head">
-            <div>
-              <p class="card-label">Experimental Preview</p>
-              <h2 id="renderTitle">Rendered collateral</h2>
-            </div>
-            <button id="openPreviewButton" type="button">Open preview</button>
-          </div>
-          <iframe id="renderFrame" title="Collateral preview"></iframe>
-        </section>
-
-        <pre id="logBox">log ready</pre>
-        <pre id="outputBox">Generated output appears here.</pre>
+      <section class="response-panel">
+        <div class="response-head">
+          <p class="section-label">Response</p>
+          <span id="statusPill" class="status-pill">Ready</span>
+        </div>
+        <p id="statusText" class="status-text">Enter a prompt and run it.</p>
+        <pre id="outputBox" class="output-box">Your grounded response will appear here.</pre>
       </section>
     </section>
   </main>

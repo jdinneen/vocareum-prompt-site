@@ -96,6 +96,41 @@ def test_reply_prompt_requires_all_thread_asks(monkeypatch):
     assert "Explicitly identify every concrete ask in the thread and answer each one." in prompt
 
 
+def test_grounded_answer_prompt_stays_generic(monkeypatch):
+    monkeypatch.setattr(
+        "app.grounding.load_grounding",
+        lambda: {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+            },
+            "mode": "live",
+            "warnings": [],
+            "catalog_front_matter": "Catalog front matter",
+            "catalog_sections": {"AI Gateway": "AI Gateway\nGrounded section"},
+            "email_sections": {},
+            "collateral_examples": {},
+            "truth_bundle": {
+                "default_public_stats": ["2M+ AWS learners"],
+                "approved_named_proof": ["AWS Academy"],
+            },
+            "style_palette": {},
+        },
+    )
+    req = GenerateRequest(
+        asset_type="grounded-answer",
+        objective="Explain AI Gateway for a university CIO in three short paragraphs.",
+    )
+
+    prompt = _build_user_prompt(req)
+
+    assert "Workflow: grounded-answer" in prompt
+    assert "Do not force email, one-pager, or deck structure" in prompt
+    assert "Answer directly from the grounding." in prompt
+    assert "No explicit example pattern available." not in prompt
+
+
 def test_reply_post_process_adds_missing_scheduling_response():
     req = GenerateRequest(
         asset_type="reply-email",
@@ -118,6 +153,17 @@ def test_brief_check_rejects_thin_outbound_email():
             asset_type="outbound-email",
             product="AI Compass",
             objective="email kim majerus",
+        )
+    )
+    assert result is not None
+    assert "too thin" in result["message"].lower()
+
+
+def test_brief_check_rejects_too_short_grounded_answer():
+    result = _brief_needs_more_detail(
+        GenerateRequest(
+            asset_type="grounded-answer",
+            objective="AI Gateway",
         )
     )
     assert result is not None
@@ -296,10 +342,12 @@ def test_generate_endpoint_returns_brief_error_for_thin_prompt(monkeypatch):
 
 
 def test_workflow_output_budgets_match_current_contract():
+    grounded_req = GenerateRequest(asset_type="grounded-answer", objective="Grounded objective")
     collateral_req = GenerateRequest(asset_type="sales-collateral", objective="Collateral objective")
     reply_req = GenerateRequest(asset_type="reply-email", objective="Reply objective")
     outbound_req = GenerateRequest(asset_type="outbound-email", objective="Outbound objective")
 
+    assert _max_output_tokens(grounded_req) == 1400
     assert _max_output_tokens(collateral_req) == 1800
     assert _max_output_tokens(reply_req) == 1600
     assert _max_output_tokens(outbound_req) == 1200

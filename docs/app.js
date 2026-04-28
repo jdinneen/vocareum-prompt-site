@@ -3,223 +3,65 @@ window.APP_CONFIG = window.APP_CONFIG || {
 };
 
 const form = document.getElementById("promptForm");
+const promptInput = document.getElementById("promptInput");
 const submitButton = document.getElementById("submitButton");
 const copyButton = document.getElementById("copyButton");
+const sourceNote = document.getElementById("sourceNote");
+const statusPill = document.getElementById("statusPill");
+const statusText = document.getElementById("statusText");
 const outputBox = document.getElementById("outputBox");
-const logBox = document.getElementById("logBox");
-const modelName = document.getElementById("modelName");
-const groundingMode = document.getElementById("groundingMode");
-const sourceDate = document.getElementById("sourceDate");
-const metaNote = document.getElementById("metaNote");
-const assetType = document.getElementById("assetType");
-const productSelect = document.getElementById("productSelect");
-const audienceInput = document.getElementById("audienceInput");
-const promptInput = document.getElementById("promptInput");
-const constraintsInput = document.getElementById("constraintsInput");
-const workflowLabel = document.getElementById("workflowLabel");
-const workflowDescription = document.getElementById("workflowDescription");
-const statusTitle = document.getElementById("statusTitle");
-const statusBody = document.getElementById("statusBody");
-const evalPanel = document.getElementById("evalPanel");
-const overallScore = document.getElementById("overallScore");
-const scoreGrid = document.getElementById("scoreGrid");
-const strengthList = document.getElementById("strengthList");
-const improvementList = document.getElementById("improvementList");
-const blockerBox = document.getElementById("blockerBox");
-const ratingSelect = document.getElementById("ratingSelect");
-const improvementNotes = document.getElementById("improvementNotes");
-const improveButton = document.getElementById("improveButton");
-const rerunButton = document.getElementById("rerunButton");
-const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
-const renderPanel = document.getElementById("renderPanel");
-const renderFrame = document.getElementById("renderFrame");
-const renderTitle = document.getElementById("renderTitle");
-const openPreviewButton = document.getElementById("openPreviewButton");
 
-let meta = {
-  deliverable_types: [],
-  products: [],
-  grounding_warnings: []
-};
-let currentRenderUrl = "";
-let lastRequestBody = null;
-let lastOutput = "";
-
-function setLog(lines) {
-  logBox.textContent = lines.join("\n");
-}
-
-function setEvalPlaceholder() {
-  overallScore.textContent = "No output yet";
-  scoreGrid.innerHTML = "";
-  strengthList.innerHTML = "<li>Generate an output to see auto-scoring.</li>";
-  improvementList.innerHTML = "<li>The system will suggest concrete improvements here.</li>";
-  blockerBox.classList.add("hidden");
-  blockerBox.textContent = "";
-}
-
-function clearRenderPreview() {
-  if (currentRenderUrl) {
-    URL.revokeObjectURL(currentRenderUrl);
-    currentRenderUrl = "";
-  }
-  renderFrame.removeAttribute("src");
-  renderTitle.textContent = "Rendered collateral";
-  renderPanel.classList.add("hidden");
-}
-
-function renderQualityReport(report) {
-  if (!report || !report.scores) {
-    setEvalPlaceholder();
-    return;
-  }
-  overallScore.textContent = `${report.overall_score}/5 · ${report.status}`;
-  scoreGrid.innerHTML = report.scores.map((item) => `
-    <div class="score-card">
-      <div class="score-value">${item.score}/5</div>
-      <div class="score-label">${item.label}</div>
-    </div>
-  `).join("");
-  strengthList.innerHTML = (report.strengths && report.strengths.length
-    ? report.strengths.map((item) => `<li>${item}</li>`).join("")
-    : "<li>No clear strengths detected yet.</li>");
-  improvementList.innerHTML = (report.improvements && report.improvements.length
-    ? report.improvements.map((item) => `<li>${item}</li>`).join("")
-    : "<li>No improvement suggestions.</li>");
-  if (report.blockers && report.blockers.length) {
-    blockerBox.classList.remove("hidden");
-    blockerBox.innerHTML = `<strong>Blockers</strong><br>${report.blockers.join("<br>")}`;
-  } else {
-    blockerBox.classList.add("hidden");
-    blockerBox.textContent = "";
-  }
-}
-
-function setRenderPreview(renderedHtml, renderedTitleText) {
-  clearRenderPreview();
-  const blob = new Blob([renderedHtml], { type: "text/html" });
-  currentRenderUrl = URL.createObjectURL(blob);
-  renderFrame.src = currentRenderUrl;
-  renderTitle.textContent = renderedTitleText || "Rendered collateral";
-  renderPanel.classList.remove("hidden");
-}
-
-function renderDeliverableOptions() {
-  assetType.innerHTML = "";
-  meta.deliverable_types.forEach((item) => {
-    const option = document.createElement("option");
-    option.value = item.id;
-    option.textContent = item.label;
-    assetType.appendChild(option);
-  });
-  assetType.value = "outbound-email";
-  renderWorkflowCard();
-}
-
-function renderWorkflowCard() {
-  const selected = meta.deliverable_types.find((item) => item.id === assetType.value);
-  if (!selected) {
-    workflowLabel.textContent = "Workflow";
-    workflowDescription.textContent = "";
-    return;
-  }
-  workflowLabel.textContent = selected.label;
-  workflowDescription.textContent = selected.description;
-}
-
-function renderSelectOptions(selectEl, values, placeholder) {
-  selectEl.innerHTML = "";
-  const emptyOption = document.createElement("option");
-  emptyOption.value = "";
-  emptyOption.textContent = placeholder;
-  selectEl.appendChild(emptyOption);
-  values.forEach((value) => {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = value;
-    selectEl.appendChild(option);
-  });
-}
-
-function renderGroundingStatus(mode, warnings, source) {
-  const isLive = mode === "live";
-  groundingMode.textContent = isLive ? "live grounding" : "fallback grounding";
-  statusTitle.textContent = isLive ? "Live doc grounding active" : "Fallback snapshot in use";
-  if (warnings && warnings.length) {
-    statusBody.textContent = warnings.join(" ");
-  } else if (isLive) {
-    statusBody.textContent = `Using the live catalog and linked approved materials from ${source.last_reviewed}.`;
-  } else {
-    statusBody.textContent = "Live sources are unavailable, so the app is using a local fallback snapshot.";
-  }
-  metaNote.textContent = isLive
-    ? "Live catalog grounding with deterministic validation before output is returned."
-    : "Fallback grounding is active. Generation still validates output, but live sources are currently unavailable.";
+function setStatus(text, tone = "neutral") {
+  statusPill.textContent = text;
+  statusPill.dataset.tone = tone;
 }
 
 async function loadMeta() {
-  setLog(["loading metadata..."]);
   const response = await fetch(`${window.APP_CONFIG.apiBaseUrl}/api/meta`);
   if (!response.ok) {
-    throw new Error("Failed to load site metadata.");
+    throw new Error("Failed to load source metadata.");
   }
-
-  meta = await response.json();
-  modelName.textContent = meta.model;
-  groundingMode.textContent = meta.grounding_mode;
-  sourceDate.textContent = meta.source.last_reviewed;
-  renderDeliverableOptions();
-  renderSelectOptions(productSelect, meta.products, "Auto-detect product");
-  renderGroundingStatus(meta.grounding_mode, meta.grounding_warnings, meta.source);
-  setEvalPlaceholder();
-
-  setLog([
-    "ready",
-    `model: ${meta.model}`,
-    `grounding: ${meta.grounding_mode}`,
-    `catalog: ${meta.source.last_reviewed}`,
-    `workflows: ${meta.deliverable_types.length}`
-  ]);
+  const meta = await response.json();
+  sourceNote.textContent = meta.grounding_mode === "live"
+    ? `Grounded in the live catalog doc. Last reviewed ${meta.source.last_reviewed}.`
+    : "Using fallback source snapshot because live source access is unavailable.";
 }
 
-assetType.addEventListener("change", () => {
-  renderWorkflowCard();
-});
+function formatError(detail) {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (!detail || typeof detail !== "object") {
+    return "Request failed.";
+  }
 
-presetButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    assetType.value = button.dataset.assetType || "outbound-email";
-    renderWorkflowCard();
-    promptInput.value = button.dataset.prompt || "";
-    constraintsInput.value = button.dataset.constraints || "";
-    audienceInput.focus();
-  });
-});
+  const lines = [];
+  if (detail.message) {
+    lines.push(detail.message);
+  }
+  if (Array.isArray(detail.missing) && detail.missing.length) {
+    lines.push(`Need more detail: ${detail.missing.join("; ")}`);
+  }
+  if (detail.example) {
+    lines.push(`Example: ${detail.example}`);
+  }
+  if (Array.isArray(detail.violations) && detail.violations.length) {
+    lines.push(...detail.violations);
+  }
+  return lines.join("\n") || "Request failed.";
+}
 
-form.addEventListener("submit", async (event) => {
+function setLoadingState(loading) {
+  submitButton.disabled = loading;
+  copyButton.disabled = loading;
+  setStatus(loading ? "Running" : "Ready", loading ? "working" : "neutral");
+}
+
+async function runPrompt(event) {
   event.preventDefault();
-  const startedAt = performance.now();
-  submitButton.disabled = true;
-  submitButton.textContent = "Generating...";
-  outputBox.textContent = "Generating...";
-  setLog([
-    "request started",
-    `workflow: ${assetType.value}`,
-    `product: ${productSelect.value || "auto"}`,
-    `audience: ${audienceInput.value.trim() || "none"}`,
-    `prompt chars: ${promptInput.value.trim().length}`,
-    "calling backend..."
-  ]);
-  clearRenderPreview();
-
-  const body = {
-    asset_type: assetType.value,
-    product: productSelect.value,
-    audience: audienceInput.value.trim(),
-    objective: promptInput.value.trim(),
-    extra_constraints: constraintsInput.value.trim()
-  };
-  lastRequestBody = body;
+  outputBox.textContent = "Running...";
+  statusText.textContent = "Building a grounded response from the catalog.";
+  setLoadingState(true);
 
   try {
     const response = await fetch(`${window.APP_CONFIG.apiBaseUrl}/api/generate`, {
@@ -227,146 +69,58 @@ form.addEventListener("submit", async (event) => {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(body)
-    });
-
-    const payload = await response.json();
-    if (!response.ok) {
-      const detail = payload.detail || {};
-      const message = typeof detail === "string"
-        ? detail
-        : detail.message || "Request failed.";
-      const violations = Array.isArray(detail.violations) ? detail.violations : [];
-      throw new Error([message].concat(violations).join(" "));
-    }
-
-    outputBox.textContent = payload.output;
-    lastOutput = payload.output;
-    renderGroundingStatus(payload.grounding_mode, payload.grounding_warnings, {
-      last_reviewed: payload.source_last_reviewed
-    });
-    renderQualityReport(payload.quality_report);
-    if (payload.rendered_html) {
-      setRenderPreview(payload.rendered_html, payload.rendered_title);
-    }
-    modelName.textContent = payload.model;
-    sourceDate.textContent = payload.source_last_reviewed;
-    groundingMode.textContent = payload.grounding_mode;
-    setLog([
-      "request complete",
-      `request id: ${payload.request_id}`,
-      `workflow: ${assetType.value}`,
-      `product: ${productSelect.value || "auto"}`,
-      `grounding: ${payload.grounding_mode}`,
-      `model: ${payload.model}`,
-      `server duration: ${payload.duration_ms} ms`,
-      `browser total: ${Math.round(performance.now() - startedAt)} ms`
-    ]);
-  } catch (error) {
-    outputBox.textContent = `Error: ${error.message}`;
-    setLog([
-      "request failed",
-      `error: ${error.message}`,
-      `browser total: ${Math.round(performance.now() - startedAt)} ms`
-    ]);
-  } finally {
-    submitButton.disabled = false;
-    submitButton.textContent = "Generate";
-  }
-});
-
-async function improveOutput() {
-  if (!lastRequestBody || !lastOutput) {
-    outputBox.textContent = "Error: generate something first before asking for an improvement pass.";
-    return;
-  }
-
-  improveButton.disabled = true;
-  improveButton.textContent = "Improving...";
-  setLog([
-    "improvement started",
-    `workflow: ${lastRequestBody.asset_type}`,
-    `rating: ${ratingSelect.value}/5`,
-    "calling backend..."
-  ]);
-
-  try {
-    const response = await fetch(`${window.APP_CONFIG.apiBaseUrl}/api/improve`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
       body: JSON.stringify({
-        request: lastRequestBody,
-        current_output: lastOutput,
-        rating: Number(ratingSelect.value),
-        notes: improvementNotes.value.trim()
+        asset_type: "grounded-answer",
+        objective: promptInput.value.trim(),
+        product: "",
+        audience: "",
+        extra_constraints: ""
       })
     });
     const payload = await response.json();
     if (!response.ok) {
-      const detail = payload.detail || {};
-      const message = typeof detail === "string" ? detail : detail.message || "Improve request failed.";
-      const violations = Array.isArray(detail.violations) ? detail.violations : [];
-      throw new Error([message].concat(violations).join(" "));
+      throw new Error(formatError(payload.detail));
     }
 
     outputBox.textContent = payload.output;
-    lastOutput = payload.output;
-    renderGroundingStatus(payload.grounding_mode, payload.grounding_warnings, {
-      last_reviewed: payload.source_last_reviewed
-    });
-    renderQualityReport(payload.quality_report);
-    if (payload.rendered_html) {
-      setRenderPreview(payload.rendered_html, payload.rendered_title);
-    } else {
-      clearRenderPreview();
-    }
-    setLog([
-      "improvement complete",
-      `request id: ${payload.request_id}`,
-      `workflow: ${lastRequestBody.asset_type}`,
-      `rating: ${ratingSelect.value}/5`,
-      `server duration: ${payload.duration_ms} ms`
-    ]);
+    statusText.textContent = payload.grounding_mode === "live"
+      ? `Ready. Grounded in live source material last reviewed ${payload.source_last_reviewed}.`
+      : "Ready. Using fallback source snapshot.";
+    setStatus("Ready", "success");
   } catch (error) {
-    outputBox.textContent = `Error: ${error.message}`;
-    setLog([
-      "improvement failed",
-      `error: ${error.message}`
-    ]);
+    outputBox.textContent = `Error:\n${error.message}`;
+    statusText.textContent = "The request did not run cleanly. Add more detail and try again.";
+    setStatus("Needs detail", "error");
   } finally {
-    improveButton.disabled = false;
-    improveButton.textContent = "Improve Output";
+    if (statusPill.textContent === "Running") {
+      setStatus("Ready");
+    }
+    submitButton.disabled = false;
+    copyButton.disabled = false;
   }
 }
 
-openPreviewButton.addEventListener("click", () => {
-  if (!currentRenderUrl) {
-    return;
-  }
-  window.open(currentRenderUrl, "_blank", "noopener,noreferrer");
-});
-
-copyButton.addEventListener("click", async () => {
+async function copyOutput() {
   try {
     await navigator.clipboard.writeText(outputBox.textContent);
     copyButton.textContent = "Copied";
     setTimeout(() => {
-      copyButton.textContent = "Copy output";
+      copyButton.textContent = "Copy";
     }, 1200);
   } catch (_error) {
     copyButton.textContent = "Copy failed";
     setTimeout(() => {
-      copyButton.textContent = "Copy output";
+      copyButton.textContent = "Copy";
     }, 1200);
   }
-});
+}
 
-improveButton.addEventListener("click", improveOutput);
-rerunButton.addEventListener("click", () => form.requestSubmit());
+form.addEventListener("submit", runPrompt);
+copyButton.addEventListener("click", copyOutput);
 
 loadMeta().catch((error) => {
-  outputBox.textContent = `Error: ${error.message}`;
-  setLog(["metadata load failed", `error: ${error.message}`]);
+  sourceNote.textContent = `Source status unavailable: ${error.message}`;
+  outputBox.textContent = `Error:\n${error.message}`;
+  statusText.textContent = "The page could not load source metadata.";
+  setStatus("Offline", "error");
 });

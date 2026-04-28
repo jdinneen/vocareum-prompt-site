@@ -1,19 +1,25 @@
 # Vocareum Prompt Site
 
-Focused internal GTM tool with three workflows only:
+Minimal grounded assistant for Vocareum.
 
-- outbound email
-- reply to pasted email thread
-- sales collateral builder
+The current frontend is intentionally stripped down:
 
-The site is grounded by:
+- one prompt box
+- one grounded response area
+- one live-source status line
+
+The default UI sends a generic grounded request against the live product catalog context. It is meant to behave like a simple LLM surface that stays inside supported Vocareum source material.
+
+The backend grounding stack uses:
 
 - the live `Vocareum Product & Feature Catalog` Google Doc
 - the live `Vocareum Approved Email Material` Google Doc
 - the live `Example Collateral` Drive folder
 - a governed local truth bundle generated from repo-approved source files
 
-It also runs deterministic validation before returning output. The validator blocks:
+The stripped-down UI uses the generic grounded-answer path. The backend still contains older email and collateral-specific paths, but they are no longer surfaced in the main page.
+
+It runs deterministic validation before returning output. The validator blocks:
 
 - unsupported numbers
 - disallowed named proof
@@ -26,7 +32,6 @@ It also runs deterministic validation before returning output. The validator blo
 - `app/`: FastAPI backend for Cloud Run
 - `app/grounding.py`: loads live Drive/Docs grounding plus the governed truth bundle
 - `app/validation.py`: deterministic output validation
-- `app/renderers.py`: lightweight collateral preview renderer
 - `app/data/governed_truth_bundle.json`: governed local proof/stats bundle
 - `scripts/build_governed_truth_bundle.py`: regenerates the local truth bundle from repo-approved source files
 
