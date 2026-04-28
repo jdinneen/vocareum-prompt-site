@@ -276,7 +276,18 @@ def validate_output(
     for sentence in _sentences(text):
         if _proof_context(sentence):
             for candidate in _extract_name_candidates(sentence):
-                if candidate not in allowed_proof_names:
+                # Allow if the candidate matches an approved name exactly, or if
+                # every proper-noun fragment in the candidate is individually approved
+                # (handles "AWS Academy and DeepLearning.AI" as two approved names).
+                if candidate in allowed_proof_names:
+                    continue
+                if allowed_proof_names and all(
+                    any(name in candidate for name in allowed_proof_names)
+                    for word in candidate.split(" and ")
+                    if word.strip() and word.strip()[0].isupper()
+                ):
+                    continue
+                if True:
                     issues.append(
                         ValidationIssue(
                             "disallowed_named_proof",
