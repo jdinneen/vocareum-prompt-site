@@ -234,7 +234,45 @@ def _post_process(req: GenerateRequest, text: str) -> str:
         cleaned = _normalize_sales_collateral(cleaned)
     elif req.asset_type == "reply-email":
         cleaned = _force_two_paragraphs(cleaned) if "Subject:" not in cleaned else cleaned
+        cleaned = _ensure_reply_addresses_scheduling(req, cleaned)
     return cleaned
+
+
+def _extract_scheduling_phrase(text: str) -> str:
+    patterns = [
+        r"(next\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))?)",
+        r"((?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+at\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))",
+        r"(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))",
+    ]
+    lowered = text.lower()
+    for pattern in patterns:
+        match = re.search(pattern, lowered, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def _ensure_reply_addresses_scheduling(req: GenerateRequest, text: str) -> str:
+    objective_lower = req.objective.lower()
+    has_schedule_ask = any(term in objective_lower for term in ("meeting", "follow-up", "follow up", "schedule", "calendar", "time"))
+    if not has_schedule_ask:
+        return text
+    if any(term in text.lower() for term in ("let me know what time works", "happy to schedule", "works on your side", "suggest an alternative", "calendar invite")):
+        return text
+
+    scheduling_phrase = _extract_scheduling_phrase(req.objective)
+    if scheduling_phrase:
+        schedule_line = (
+            f"If {scheduling_phrase} works for you, I am happy to confirm that time. "
+            "If not, feel free to suggest an alternative."
+        )
+    else:
+        schedule_line = "Happy to schedule a follow-up. If you have a preferred time, feel free to suggest it."
+
+    if "Best," in text:
+        body, signoff = text.rsplit("Best,", 1)
+        return f"{body.strip()}\n\n{schedule_line}\n\nBest,{signoff}"
+    return f"{text.strip()}\n\n{schedule_line}"
 
 
 def _call_model(req: GenerateRequest, request_id: str, correction_instructions: str = "") -> tuple[str, int]:

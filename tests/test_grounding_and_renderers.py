@@ -6,6 +6,7 @@ from app.main import (
     GenerateRequest,
     _build_user_prompt,
     _max_output_tokens,
+    _post_process,
     _sanitize_proof_sections,
     app,
 )
@@ -91,6 +92,22 @@ def test_reply_prompt_requires_all_thread_asks(monkeypatch):
 
     assert "If the thread contains more than one ask, answer all of them in the reply." in prompt
     assert "Explicitly identify every concrete ask in the thread and answer each one." in prompt
+
+
+def test_reply_post_process_adds_missing_scheduling_response():
+    req = GenerateRequest(
+        asset_type="reply-email",
+        objective="Thread: Can Vocareum provide ChatGPT access? Also, would next Tuesday at 5:00 PM work for a follow-up?",
+    )
+    text = (
+        "Subject: Re: Follow-up\n\n"
+        "Hi [Name],\n\n"
+        "Vocareum provides governed API-based access through AI Gateway rather than consumer chatbot seats.\n\n"
+        "Best,\nJon"
+    )
+    processed = _post_process(req, text)
+    assert "if next tuesday at 5:00 pm works for you" in processed.lower()
+    assert "suggest an alternative" in processed.lower()
 
 
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
