@@ -179,13 +179,36 @@ def _proof_context(sentence: str) -> bool:
     return any(cue in lowered for cue in PROOF_CUES)
 
 
+SECTION_HEADER_PREFIXES = (
+    "Subject",
+    "Headline",
+    "Subhead",
+    "Core Capabilities",
+    "Best-Fit",
+    "How It Works",
+    "Who Uses",
+    "Stat Bar",
+    "Call To",
+    "Platform Reach",
+    "Platform Scale",
+    "Platform Overview",
+    "Public Proof",
+    "Proof and",
+    "Proof Points",
+    "Key Capabilities",
+    "Key Features",
+    "Use Cases",
+    "Typical Use",
+    "Source Links",
+    "Slide ",
+)
+
+
 def _extract_name_candidates(sentence: str) -> list[str]:
     names = []
     for match in NAME_RE.finditer(sentence):
         candidate = match.group(0).strip(" .,:;()")
-        if candidate.startswith("Subject"):
-            continue
-        if candidate.startswith("Headline"):
+        if any(candidate.startswith(prefix) for prefix in SECTION_HEADER_PREFIXES):
             continue
         names.append(candidate)
     return names
