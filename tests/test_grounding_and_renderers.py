@@ -124,6 +124,21 @@ def test_brief_check_rejects_thin_outbound_email():
     assert "too thin" in result["message"].lower()
 
 
+def test_outbound_post_process_adds_goal_based_next_step():
+    req = GenerateRequest(
+        asset_type="outbound-email",
+        objective="Write an outbound email to Kim Majerus about governed model access for students. Goal: ask for a follow-up meeting about AI Gateway.",
+    )
+    text = (
+        "Subject: Governed model access for student AI coursework\n\n"
+        "Hi Kim,\n\n"
+        "Vocareum AI Gateway provides governed model access for coursework.\n\n"
+        "Best,\nJon"
+    )
+    processed = _post_process(req, text)
+    assert "would you be open to a short follow-up meeting next week?" in processed.lower()
+
+
 def test_validation_allows_time_from_thread_context():
     result = validate_output(
         asset_type="reply-email",

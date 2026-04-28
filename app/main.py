@@ -315,6 +315,8 @@ def _post_process(req: GenerateRequest, text: str) -> str:
     if req.asset_type == "sales-collateral":
         cleaned = _sanitize_proof_sections(cleaned)
         cleaned = _normalize_sales_collateral(cleaned)
+    elif req.asset_type == "outbound-email":
+        cleaned = _ensure_outbound_next_step(req, cleaned)
     elif req.asset_type == "reply-email":
         cleaned = _force_two_paragraphs(cleaned) if "Subject:" not in cleaned else cleaned
         cleaned = _ensure_reply_addresses_scheduling(req, cleaned)
@@ -356,6 +358,40 @@ def _ensure_reply_addresses_scheduling(req: GenerateRequest, text: str) -> str:
         body, signoff = text.rsplit("Best,", 1)
         return f"{body.strip()}\n\n{schedule_line}\n\nBest,{signoff}"
     return f"{text.strip()}\n\n{schedule_line}"
+
+
+def _extract_outbound_goal(text: str) -> str:
+    match = re.search(r"(?:goal|ask)\s*:\s*([^\n.]+)", text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    lowered = text.lower()
+    if "follow-up meeting" in lowered:
+        return "ask for a follow-up meeting"
+    if "schedule a demo" in lowered or "demo" in lowered:
+        return "ask for a demo"
+    if "working session" in lowered:
+        return "ask for a working session"
+    return ""
+
+
+def _ensure_outbound_next_step(req: GenerateRequest, text: str) -> str:
+    if any(term in text.lower() for term in ("would you be open", "let me know", "happy to discuss", "follow-up meeting", "schedule a demo", "working session")):
+        return text
+    goal = _extract_outbound_goal(req.objective)
+    if not goal:
+        return text
+    if "meeting" in goal:
+        close_line = "If this is relevant, would you be open to a short follow-up meeting next week?"
+    elif "demo" in goal:
+        close_line = "If this is relevant, would you be open to a short demo?"
+    elif "working session" in goal:
+        close_line = "If this is relevant, would you be open to a short working session?"
+    else:
+        close_line = "If this is relevant, I would be glad to discuss it further."
+    if "Best," in text:
+        body, signoff = text.rsplit("Best,", 1)
+        return f"{body.strip()}\n\n{close_line}\n\nBest,{signoff}"
+    return f"{text.strip()}\n\n{close_line}"
 
 
 def _call_model(req: GenerateRequest, request_id: str, correction_instructions: str = "") -> tuple[str, int]:
