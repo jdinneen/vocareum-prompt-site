@@ -222,6 +222,17 @@ KNOWN_PRODUCT_FRAGMENTS = {
 }
 
 MAX_PROOF_NAME_WORDS = 5
+MIN_PROOF_NAME_WORDS = 2
+
+# Common verbs/adjectives that start capitalized mid-sentence and look like names
+# to the regex but are not proof references.
+GENERIC_NAME_STARTS = {
+    "Manages", "Provides", "Enables", "Supports", "Delivers", "Includes",
+    "Offers", "Allows", "Routes", "Governs", "Integrates", "Deploys",
+    "Configures", "Controls", "Enforces", "Prevents", "Reduces", "Tracks",
+    "Each", "Every", "These", "Those", "Using", "Through", "Within",
+    "Managed", "Governed", "Centralized", "Distributed", "Automated",
+}
 
 
 def _extract_name_candidates(sentence: str) -> list[str]:
@@ -231,7 +242,11 @@ def _extract_name_candidates(sentence: str) -> list[str]:
         if any(candidate.startswith(prefix) for prefix in SECTION_HEADER_PREFIXES):
             continue
         # Skip long descriptive titles — real named proof is short (org names).
-        if len(candidate.split()) > MAX_PROOF_NAME_WORDS:
+        words = candidate.split()
+        if len(words) > MAX_PROOF_NAME_WORDS:
+            continue
+        # Skip very short phrases where the first word is a generic verb/adjective.
+        if len(words) <= MIN_PROOF_NAME_WORDS and words[0] in GENERIC_NAME_STARTS:
             continue
         # Skip references that contain a known product name.
         lowered = candidate.lower()
