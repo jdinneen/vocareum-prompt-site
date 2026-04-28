@@ -60,6 +60,17 @@ PYTHONPATH=. /Users/jondinneen/Desktop/AIMktg/.venv/bin/python -m uvicorn app.ma
 
 Open `http://127.0.0.1:8000`.
 
+## Tests
+
+From the AIMktg repo root:
+
+```bash
+.venv/bin/python -m pytest sites/vocareum-prompt-site/tests -q
+```
+
+If you run the site repo standalone, install `pytest` into that local Python
+environment before running the same `tests/` suite there.
+
 ## Deploy
 
 Backend:
