@@ -665,18 +665,20 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
 
     draft, duration_ms = _call_model(req, request_id)
 
-    # For one-pagers, if the model stopped early (missing sections), retry
-    # with an explicit completion instruction before running validation.
+    # For one-pagers, if the model stopped early (missing sections), ask it
+    # to continue from the partial output rather than regenerating from scratch.
     if req.asset_type == "one-pager":
         missing = _one_pager_missing_sections(draft)
         if missing:
-            completion_fix = (
-                f"The first draft is incomplete. It is missing these required sections: {', '.join(missing)}. "
-                "Generate the COMPLETE one-pager with ALL eight sections. Do not stop early. "
-                "Start from Headline and write through CTA without skipping any section."
+            continuation = (
+                f"Here is the partial one-pager so far:\n\n{draft}\n\n"
+                f"Continue from where the output stopped. Write ONLY the remaining sections: {', '.join(missing)}. "
+                "Use the same style. Keep each section concise."
             )
-            draft, extra_ms = _call_model(req, request_id, completion_fix)
+            tail, extra_ms = _call_model(req, request_id, continuation)
             duration_ms += extra_ms
+            # Append the continuation to the draft
+            draft = draft.rstrip() + "\n\n" + tail.lstrip()
 
     first_validation = validate_output(
         asset_type=req.asset_type,
