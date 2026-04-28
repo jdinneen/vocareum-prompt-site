@@ -256,6 +256,111 @@ button:disabled {
   background: rgba(255, 255, 255, 0.92);
 }
 
+.eval-panel {
+  border-radius: 20px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, rgba(239, 244, 246, 0.95) 0%, rgba(255, 255, 255, 0.96) 100%);
+  border: 1px solid rgba(68, 86, 100, 0.14);
+}
+
+.eval-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.eval-head h2 {
+  margin: 6px 0 0;
+  font-size: 1.2rem;
+  color: var(--slate);
+}
+
+.overall-score {
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--slate);
+  color: var(--white);
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.score-card {
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(68, 86, 100, 0.12);
+}
+
+.score-value {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--slate);
+}
+
+.score-label,
+.mini-label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--steel);
+}
+
+.eval-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.eval-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--steel);
+  line-height: 1.5;
+}
+
+.blocker-box {
+  margin-top: 14px;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 127, 80, 0.12);
+  color: #7c2d12;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.blocker-box.hidden {
+  display: none;
+}
+
+.eval-actions {
+  margin-top: 14px;
+}
+
+#improveButton,
+#rerunButton {
+  max-width: 220px;
+}
+
+#improveButton {
+  background: var(--coral);
+  color: var(--white);
+}
+
+#rerunButton {
+  background: var(--gray);
+  color: var(--slate);
+}
+
 .render-panel.hidden {
   display: none;
 }
@@ -336,6 +441,11 @@ button:disabled {
   .output-panel {
     border-radius: 20px;
     padding: 18px;
+  }
+
+  .score-grid,
+  .eval-columns {
+    grid-template-columns: 1fr;
   }
 
   .control-panel {

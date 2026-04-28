@@ -5,7 +5,9 @@ from app.grounding import SOURCE_TITLE, grounding_block
 from app.main import (
     GenerateRequest,
     _build_user_prompt,
+    _brief_needs_more_detail,
     _max_output_tokens,
+    _auto_quality_report,
     _post_process,
     _sanitize_proof_sections,
     app,
@@ -110,6 +112,18 @@ def test_reply_post_process_adds_missing_scheduling_response():
     assert "suggest an alternative" in processed.lower()
 
 
+def test_brief_check_rejects_thin_outbound_email():
+    result = _brief_needs_more_detail(
+        GenerateRequest(
+            asset_type="outbound-email",
+            product="AI Compass",
+            objective="email kim majerus",
+        )
+    )
+    assert result is not None
+    assert "too thin" in result["message"].lower()
+
+
 def test_validation_allows_time_from_thread_context():
     result = validate_output(
         asset_type="reply-email",
@@ -119,6 +133,21 @@ def test_validation_allows_time_from_thread_context():
         objective_text="Thread: Would next Tuesday at 5:00 PM work for a follow-up?",
     )
     assert result.ok
+
+
+def test_auto_quality_report_flags_missing_schedule_completion():
+    req = GenerateRequest(
+        asset_type="reply-email",
+        product="AI Gateway",
+        objective="Thread: Can Vocareum provide ChatGPT access? Also, would next Tuesday at 5:00 PM work for a follow-up?",
+    )
+    report = _auto_quality_report(
+        req,
+        "Subject: Re: Follow-up\n\nVocareum provides governed API-based access through AI Gateway.",
+        "AI Gateway provides governed model access.",
+        {"approved_numeric_claims": [], "default_public_stats": [], "approved_named_proof": [], "allowed_reference_names": ["AI Gateway"]},
+    )
+    assert any("scheduling ask" in item.lower() for item in report["blockers"])
 
 
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
@@ -222,6 +251,33 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
         "reply-email",
         "sales-collateral",
     ]
+
+
+def test_generate_endpoint_returns_brief_error_for_thin_prompt(monkeypatch):
+    monkeypatch.setattr(
+        "app.main.load_grounding",
+        lambda: {
+            "source": {"title": SOURCE_TITLE, "last_reviewed": "2026-04-27", "doc_url": "https://example.com/catalog"},
+            "mode": "live",
+            "warnings": [],
+            "catalog_sections": {"AI Compass": "section"},
+            "truth_bundle": {"default_public_stats": []},
+            "style_palette": {"slate": "#2e3a41"},
+        },
+    )
+    client = TestClient(app)
+    response = client.post(
+        "/api/generate",
+        json={
+            "asset_type": "outbound-email",
+            "product": "AI Compass",
+            "objective": "email kim majerus",
+            "extra_constraints": "",
+            "audience": "aws",
+        },
+    )
+    assert response.status_code == 422
+    assert "too thin" in response.json()["detail"]["message"].lower()
 
 
 def test_workflow_output_budgets_match_current_contract():

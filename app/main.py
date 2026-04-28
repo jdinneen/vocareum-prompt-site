@@ -41,6 +41,14 @@ class GenerateResponse(BaseModel):
     rendered_html: str | None = None
     rendered_kind: str | None = None
     rendered_title: str | None = None
+    quality_report: dict = Field(default_factory=dict)
+
+
+class ImproveRequest(BaseModel):
+    request: GenerateRequest
+    current_output: str = Field(..., min_length=20, max_length=20000)
+    rating: int = Field(default=3, ge=1, le=5)
+    notes: str = Field(default="", max_length=2000)
 
 
 def _require_api_key() -> str:
@@ -115,6 +123,50 @@ def _structured_brief(req: GenerateRequest) -> str:
     if req.audience:
         parts.append(f"Audience: {req.audience}")
     return "\n".join(parts)
+
+
+def _objective_tokens(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z0-9@.+-]{2,}", text)
+
+
+def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
+    objective = req.objective.strip()
+    lower = objective.lower()
+    tokens = _objective_tokens(objective)
+    missing: list[str] = []
+    examples: list[str] = []
+
+    if len(tokens) < 5:
+        missing.append("more context than a one-line command")
+
+    if req.asset_type == "outbound-email":
+        if not req.product:
+            missing.append("which product or surface this email is about")
+        if not req.audience and not any(term in lower for term in ("buyer", "lead", "team", "director", "vp", "head")):
+            missing.append("who the email is for")
+        if not any(term in lower for term in ("ask", "meeting", "demo", "follow-up", "intro", "reach out", "write")):
+            missing.append("what the email should try to accomplish")
+        examples.append("Write an outbound email to Kim Majerus about AI Compass for AWS training leaders. Goal: ask for a follow-up meeting about governed AI tutoring.")
+    elif req.asset_type == "reply-email":
+        if not any(term in lower for term in ("thread", "prospect:", "customer:", "email:", "re:", "fwd:", "need:")):
+            missing.append("the actual incoming email or thread context")
+        examples.append("Thread: Hi Jon, can Vocareum provide ChatGPT access for students, and would next Tuesday work for a follow-up? Need: write the best reply.")
+    elif req.asset_type == "sales-collateral":
+        if not req.product:
+            missing.append("which product or surface the collateral is for")
+        if not req.audience and not any(term in lower for term in ("buyer", "audience", "architect", "leader", "team", "platform")):
+            missing.append("who the collateral is for")
+        if not any(term in lower for term in ("one-pager", "collateral", "overview", "sales", "asset", "build")):
+            missing.append("what asset you want built")
+        examples.append("Build sales collateral for On-the-Fly Labs aimed at AWS solutions architects running customer workshops.")
+
+    if not missing:
+        return None
+    return {
+        "message": "Brief is too thin to generate a good result.",
+        "missing": missing,
+        "example": examples[0] if examples else "",
+    }
 
 
 def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") -> str:
@@ -359,6 +411,103 @@ def _validation_support_text(req: GenerateRequest) -> str:
     )
 
 
+def _detect_schedule_ask(text: str) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in ("meeting", "follow-up", "follow up", "schedule", "calendar", "time"))
+
+
+def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, truth_bundle: dict) -> dict:
+    validation = validate_output(
+        asset_type=req.asset_type,
+        text=output,
+        support_text=support_text,
+        truth_bundle=truth_bundle,
+        objective_text=req.objective,
+    )
+    scores = []
+    blockers: list[str] = []
+    strengths: list[str] = []
+    improvements: list[str] = []
+
+    grounding_score = 5 if validation.ok else max(1, 5 - min(4, len(validation.issues)))
+    if validation.ok:
+        strengths.append("No deterministic grounding violations detected.")
+    else:
+        blockers.extend(issue.detail for issue in validation.issues[:4])
+        improvements.append("Tighten unsupported claims and proof references.")
+    scores.append({"id": "grounding", "label": "Grounding safety", "score": grounding_score})
+
+    has_subject = output.strip().startswith("Subject:")
+    workflow_score = 5 if has_subject or req.asset_type == "sales-collateral" else 2
+    if req.asset_type == "sales-collateral":
+        required_labels = ["Headline:", "Subhead:", "Core Capabilities:", "Best-Fit Buyers:", "Proof:", "CTA:"]
+        present = sum(1 for label in required_labels if label in output)
+        workflow_score = max(1, min(5, present))
+        if present == len(required_labels):
+            strengths.append("Collateral structure is complete.")
+        else:
+            improvements.append("Complete all required collateral sections.")
+    else:
+        if has_subject:
+            strengths.append("Email format is send-ready.")
+        else:
+            improvements.append("Return a full send-ready email with subject line.")
+    scores.append({"id": "workflow", "label": "Workflow fit", "score": workflow_score})
+
+    specificity_hits = 0
+    if req.product and req.product.lower() in output.lower():
+        specificity_hits += 2
+    if req.audience and any(token.lower() in output.lower() for token in _objective_tokens(req.audience)[:4]):
+        specificity_hits += 2
+    if len(output.split()) > 80:
+        specificity_hits += 1
+    specificity_score = max(1, min(5, specificity_hits + 1))
+    if specificity_score >= 4:
+        strengths.append("Output is specific to the requested product or audience.")
+    else:
+        improvements.append("Make the output more specific to the named person, audience, or product.")
+    scores.append({"id": "specificity", "label": "Specificity", "score": specificity_score})
+
+    actionability_score = 3
+    if req.asset_type == "sales-collateral":
+        actionability_score = 5 if "CTA:" in output else 2
+    else:
+        has_next_step = any(term in output.lower() for term in ("meeting", "follow-up", "calendar", "demo", "let me know", "suggest an alternative"))
+        if _detect_schedule_ask(req.objective):
+            actionability_score = 5 if has_next_step else 2
+        else:
+            actionability_score = 4 if has_next_step else 3
+    if actionability_score >= 4:
+        strengths.append("Output includes a concrete next step.")
+    else:
+        improvements.append("Add a clearer next step or call to action.")
+    scores.append({"id": "actionability", "label": "Actionability", "score": actionability_score})
+
+    completeness_score = 4
+    if req.asset_type == "reply-email":
+        asks = 1
+        if _detect_schedule_ask(req.objective):
+            asks += 1
+        answered_schedule = not _detect_schedule_ask(req.objective) or any(
+            term in output.lower() for term in ("works for you", "calendar", "suggest an alternative", "confirm that time")
+        )
+        completeness_score = 5 if answered_schedule and asks >= 2 else 3 if answered_schedule else 1
+        if not answered_schedule:
+            blockers.append("Reply does not address the scheduling ask from the thread.")
+    scores.append({"id": "completeness", "label": "Completeness", "score": completeness_score})
+
+    overall = round(sum(item["score"] for item in scores) / len(scores), 1)
+    status = "strong" if overall >= 4.3 else "usable" if overall >= 3.3 else "needs-work"
+    return {
+        "overall_score": overall,
+        "status": status,
+        "scores": scores,
+        "blockers": blockers[:4],
+        "strengths": strengths[:4],
+        "improvements": improvements[:4],
+    }
+
+
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     grounding = load_grounding()
     support_text = _validation_support_text(req)
@@ -408,6 +557,54 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     )
 
 
+def _improve_text(
+    req: GenerateRequest,
+    current_output: str,
+    rating: int,
+    notes: str,
+    request_id: str,
+) -> tuple[str, int]:
+    grounding = load_grounding()
+    support_text = _validation_support_text(req)
+    quality_report = _auto_quality_report(req, current_output, support_text, grounding["truth_bundle"])
+    issues = "\n".join(f"- {item}" for item in quality_report.get("blockers", [])[:4])
+    suggestions = "\n".join(f"- {item}" for item in quality_report.get("improvements", [])[:4])
+    correction = f"""Improve the existing draft without changing the underlying grounded facts.
+
+Current draft:
+{current_output}
+
+User rating: {rating}/5
+User feedback:
+{notes or 'No extra user feedback provided.'}
+
+Auto-evaluation blockers:
+{issues or '- none'}
+
+Auto-evaluation improvements:
+{suggestions or '- make the output sharper and more specific'}
+
+Produce a better version for the same workflow. Keep only grounded facts. Be more specific, more usable, and cleaner than the current draft."""
+    revised, duration_ms = _call_model(req, request_id, correction)
+    validation = validate_output(
+        asset_type=req.asset_type,
+        text=revised,
+        support_text=support_text,
+        truth_bundle=grounding["truth_bundle"],
+        objective_text=req.objective,
+    )
+    if not validation.ok:
+        issue_lines = [f"{issue.code}: {issue.detail}" for issue in validation.issues[:8]]
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Improved output failed deterministic validation.",
+                "violations": issue_lines,
+            },
+        )
+    return revised, duration_ms
+
+
 app = FastAPI(title="Vocareum Prompt API")
 app.add_middleware(
     CORSMiddleware,
@@ -452,12 +649,21 @@ def meta() -> dict:
 def generate(req: GenerateRequest) -> GenerateResponse:
     data = load_grounding()
     request_id = uuid.uuid4().hex[:12]
+    brief_problem = _brief_needs_more_detail(req)
+    if brief_problem:
+        raise HTTPException(status_code=422, detail=brief_problem)
     try:
         output, duration_ms = _generate_text(req, request_id)
     except Exception:
         log.exception("generate_failed request_id=%s model=%s", request_id, _model_name())
         raise
     rendered = render_collateral(req.asset_type, output)
+    quality_report = _auto_quality_report(
+        req,
+        output,
+        _validation_support_text(req),
+        data["truth_bundle"],
+    )
     return GenerateResponse(
         output=output,
         model=_model_name(),
@@ -470,4 +676,46 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         rendered_html=rendered["html"] if rendered else None,
         rendered_kind=rendered["kind"] if rendered else None,
         rendered_title=rendered["title"] if rendered else None,
+        quality_report=quality_report,
+    )
+
+
+@app.post("/api/improve", response_model=GenerateResponse)
+def improve(req: ImproveRequest) -> GenerateResponse:
+    data = load_grounding()
+    request_id = uuid.uuid4().hex[:12]
+    brief_problem = _brief_needs_more_detail(req.request)
+    if brief_problem:
+        raise HTTPException(status_code=422, detail=brief_problem)
+    try:
+        output, duration_ms = _improve_text(
+            req.request,
+            req.current_output,
+            req.rating,
+            req.notes,
+            request_id,
+        )
+    except Exception:
+        log.exception("improve_failed request_id=%s model=%s", request_id, _model_name())
+        raise
+    rendered = render_collateral(req.request.asset_type, output)
+    quality_report = _auto_quality_report(
+        req.request,
+        output,
+        _validation_support_text(req.request),
+        data["truth_bundle"],
+    )
+    return GenerateResponse(
+        output=output,
+        model=_model_name(),
+        source_title=data["source"]["title"],
+        source_last_reviewed=data["source"]["last_reviewed"],
+        grounding_mode=data.get("mode", "live"),
+        grounding_warnings=data.get("warnings", []),
+        request_id=request_id,
+        duration_ms=duration_ms,
+        rendered_html=rendered["html"] if rendered else None,
+        rendered_kind=rendered["kind"] if rendered else None,
+        rendered_title=rendered["title"] if rendered else None,
+        quality_report=quality_report,
     )

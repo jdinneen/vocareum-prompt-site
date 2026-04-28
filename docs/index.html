@@ -93,6 +93,52 @@
           <p id="statusBody" class="status-body">Loading...</p>
         </article>
 
+        <section id="evalPanel" class="eval-panel">
+          <div class="eval-head">
+            <div>
+              <p class="card-label">Testing Environment</p>
+              <h2>Rate and Improve</h2>
+            </div>
+            <div id="overallScore" class="overall-score">No output yet</div>
+          </div>
+
+          <div id="scoreGrid" class="score-grid"></div>
+
+          <div class="eval-columns">
+            <div>
+              <p class="mini-label">Strengths</p>
+              <ul id="strengthList" class="eval-list"></ul>
+            </div>
+            <div>
+              <p class="mini-label">Needs work</p>
+              <ul id="improvementList" class="eval-list"></ul>
+            </div>
+          </div>
+
+          <div id="blockerBox" class="blocker-box hidden"></div>
+
+          <div class="field">
+            <label for="ratingSelect">Your rating</label>
+            <select id="ratingSelect" name="ratingSelect">
+              <option value="5">5 - strong</option>
+              <option value="4">4 - usable</option>
+              <option value="3" selected>3 - mixed</option>
+              <option value="2">2 - weak</option>
+              <option value="1">1 - bad</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="improvementNotes">Improvement notes</label>
+            <textarea id="improvementNotes" rows="4" placeholder="Example: too generic, wrong person, missing ask, weak CTA, not specific enough to AWS."></textarea>
+          </div>
+
+          <div class="action-row eval-actions">
+            <button id="improveButton" type="button">Improve Output</button>
+            <button id="rerunButton" type="button">Re-run Test</button>
+          </div>
+        </section>
+
         <section id="renderPanel" class="render-panel hidden">
           <div class="render-panel-head">
             <div>

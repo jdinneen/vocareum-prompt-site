@@ -20,6 +20,16 @@ const workflowLabel = document.getElementById("workflowLabel");
 const workflowDescription = document.getElementById("workflowDescription");
 const statusTitle = document.getElementById("statusTitle");
 const statusBody = document.getElementById("statusBody");
+const evalPanel = document.getElementById("evalPanel");
+const overallScore = document.getElementById("overallScore");
+const scoreGrid = document.getElementById("scoreGrid");
+const strengthList = document.getElementById("strengthList");
+const improvementList = document.getElementById("improvementList");
+const blockerBox = document.getElementById("blockerBox");
+const ratingSelect = document.getElementById("ratingSelect");
+const improvementNotes = document.getElementById("improvementNotes");
+const improveButton = document.getElementById("improveButton");
+const rerunButton = document.getElementById("rerunButton");
 const presetButtons = Array.from(document.querySelectorAll(".preset-button"));
 const renderPanel = document.getElementById("renderPanel");
 const renderFrame = document.getElementById("renderFrame");
@@ -32,9 +42,20 @@ let meta = {
   grounding_warnings: []
 };
 let currentRenderUrl = "";
+let lastRequestBody = null;
+let lastOutput = "";
 
 function setLog(lines) {
   logBox.textContent = lines.join("\n");
+}
+
+function setEvalPlaceholder() {
+  overallScore.textContent = "No output yet";
+  scoreGrid.innerHTML = "";
+  strengthList.innerHTML = "<li>Generate an output to see auto-scoring.</li>";
+  improvementList.innerHTML = "<li>The system will suggest concrete improvements here.</li>";
+  blockerBox.classList.add("hidden");
+  blockerBox.textContent = "";
 }
 
 function clearRenderPreview() {
@@ -45,6 +66,33 @@ function clearRenderPreview() {
   renderFrame.removeAttribute("src");
   renderTitle.textContent = "Rendered collateral";
   renderPanel.classList.add("hidden");
+}
+
+function renderQualityReport(report) {
+  if (!report || !report.scores) {
+    setEvalPlaceholder();
+    return;
+  }
+  overallScore.textContent = `${report.overall_score}/5 · ${report.status}`;
+  scoreGrid.innerHTML = report.scores.map((item) => `
+    <div class="score-card">
+      <div class="score-value">${item.score}/5</div>
+      <div class="score-label">${item.label}</div>
+    </div>
+  `).join("");
+  strengthList.innerHTML = (report.strengths && report.strengths.length
+    ? report.strengths.map((item) => `<li>${item}</li>`).join("")
+    : "<li>No clear strengths detected yet.</li>");
+  improvementList.innerHTML = (report.improvements && report.improvements.length
+    ? report.improvements.map((item) => `<li>${item}</li>`).join("")
+    : "<li>No improvement suggestions.</li>");
+  if (report.blockers && report.blockers.length) {
+    blockerBox.classList.remove("hidden");
+    blockerBox.innerHTML = `<strong>Blockers</strong><br>${report.blockers.join("<br>")}`;
+  } else {
+    blockerBox.classList.add("hidden");
+    blockerBox.textContent = "";
+  }
 }
 
 function setRenderPreview(renderedHtml, renderedTitleText) {
@@ -123,6 +171,7 @@ async function loadMeta() {
   renderDeliverableOptions();
   renderSelectOptions(productSelect, meta.products, "Auto-detect product");
   renderGroundingStatus(meta.grounding_mode, meta.grounding_warnings, meta.source);
+  setEvalPlaceholder();
 
   setLog([
     "ready",
@@ -170,6 +219,7 @@ form.addEventListener("submit", async (event) => {
     objective: promptInput.value.trim(),
     extra_constraints: constraintsInput.value.trim()
   };
+  lastRequestBody = body;
 
   try {
     const response = await fetch(`${window.APP_CONFIG.apiBaseUrl}/api/generate`, {
@@ -191,9 +241,11 @@ form.addEventListener("submit", async (event) => {
     }
 
     outputBox.textContent = payload.output;
+    lastOutput = payload.output;
     renderGroundingStatus(payload.grounding_mode, payload.grounding_warnings, {
       last_reviewed: payload.source_last_reviewed
     });
+    renderQualityReport(payload.quality_report);
     if (payload.rendered_html) {
       setRenderPreview(payload.rendered_html, payload.rendered_title);
     }
@@ -223,6 +275,72 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
+async function improveOutput() {
+  if (!lastRequestBody || !lastOutput) {
+    outputBox.textContent = "Error: generate something first before asking for an improvement pass.";
+    return;
+  }
+
+  improveButton.disabled = true;
+  improveButton.textContent = "Improving...";
+  setLog([
+    "improvement started",
+    `workflow: ${lastRequestBody.asset_type}`,
+    `rating: ${ratingSelect.value}/5`,
+    "calling backend..."
+  ]);
+
+  try {
+    const response = await fetch(`${window.APP_CONFIG.apiBaseUrl}/api/improve`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        request: lastRequestBody,
+        current_output: lastOutput,
+        rating: Number(ratingSelect.value),
+        notes: improvementNotes.value.trim()
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      const detail = payload.detail || {};
+      const message = typeof detail === "string" ? detail : detail.message || "Improve request failed.";
+      const violations = Array.isArray(detail.violations) ? detail.violations : [];
+      throw new Error([message].concat(violations).join(" "));
+    }
+
+    outputBox.textContent = payload.output;
+    lastOutput = payload.output;
+    renderGroundingStatus(payload.grounding_mode, payload.grounding_warnings, {
+      last_reviewed: payload.source_last_reviewed
+    });
+    renderQualityReport(payload.quality_report);
+    if (payload.rendered_html) {
+      setRenderPreview(payload.rendered_html, payload.rendered_title);
+    } else {
+      clearRenderPreview();
+    }
+    setLog([
+      "improvement complete",
+      `request id: ${payload.request_id}`,
+      `workflow: ${lastRequestBody.asset_type}`,
+      `rating: ${ratingSelect.value}/5`,
+      `server duration: ${payload.duration_ms} ms`
+    ]);
+  } catch (error) {
+    outputBox.textContent = `Error: ${error.message}`;
+    setLog([
+      "improvement failed",
+      `error: ${error.message}`
+    ]);
+  } finally {
+    improveButton.disabled = false;
+    improveButton.textContent = "Improve Output";
+  }
+}
+
 openPreviewButton.addEventListener("click", () => {
   if (!currentRenderUrl) {
     return;
@@ -244,6 +362,9 @@ copyButton.addEventListener("click", async () => {
     }, 1200);
   }
 });
+
+improveButton.addEventListener("click", improveOutput);
+rerunButton.addEventListener("click", () => form.requestSubmit());
 
 loadMeta().catch((error) => {
   outputBox.textContent = `Error: ${error.message}`;
