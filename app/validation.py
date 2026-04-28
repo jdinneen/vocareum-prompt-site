@@ -292,7 +292,12 @@ def validate_output(
         if len(tokens) < 3:
             continue
         overlap = tokens & support_tokens
-        min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
+        # Collateral formats paraphrase more than raw email; use a lower bar.
+        is_collateral = asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}
+        if is_collateral:
+            min_overlap = 1 if len(tokens) <= 5 else max(2, (len(tokens) + 2) // 3)
+        else:
+            min_overlap = 1 if len(tokens) <= 4 else max(2, (len(tokens) + 1) // 2)
         if len(overlap) < min_overlap:
             issues.append(
                 ValidationIssue(

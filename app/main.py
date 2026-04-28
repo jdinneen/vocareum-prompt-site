@@ -149,7 +149,7 @@ def _max_output_tokens(req: GenerateRequest) -> int:
     if req.asset_type == "grounded-answer":
         return 1400
     if req.asset_type == "one-pager":
-        return 2400
+        return 3200
     if req.asset_type == "sales-collateral":
         return 1800
     if req.asset_type == "sales-deck-brief":
