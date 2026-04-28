@@ -92,6 +92,9 @@ def _output_format_instructions(req: GenerateRequest) -> str:
         return (
             "Return the most useful grounded response for the request. "
             "Answer directly in plain business English. "
+            "Lead with specific product capabilities and use cases, not platform-wide stats. "
+            "Only include approved public stats if they directly support the point being made — never list stats as filler. "
+            "If the user asks for an email, write a real send-ready email with a Subject line, a substantive body about the product, and a clear next step. "
             "Do not force email, one-pager, or deck structure unless the user explicitly asks for it."
         )
     if req.asset_type == "outbound-email":
@@ -167,7 +170,15 @@ def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
     missing: list[str] = []
     examples: list[str] = []
 
-    if len(tokens) < 5:
+    # Count product and audience as context — a short objective is fine if
+    # the structured fields carry the weight.
+    effective_tokens = len(tokens)
+    if req.product:
+        effective_tokens += 2
+    if req.audience:
+        effective_tokens += 2
+
+    if effective_tokens < 5:
         missing.append("more context than a one-line command")
 
     if req.asset_type == "grounded-answer":
