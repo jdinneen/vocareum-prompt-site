@@ -273,6 +273,9 @@ def validate_output(
     # and quote checks still apply.
     is_answer_mode = asset_type == "grounded-answer"
 
+    # Names from the user's objective are user-supplied context, not hallucinated proof.
+    objective_names = {n for n in _extract_name_candidates(objective_text)}
+
     for sentence in _sentences(text):
         if _proof_context(sentence):
             for candidate in _extract_name_candidates(sentence):
@@ -286,6 +289,12 @@ def validate_output(
                     for word in candidate.split(" and ")
                     if word.strip() and word.strip()[0].isupper()
                 ):
+                    continue
+                # Allow names that appear in the user's objective (user-supplied context).
+                if candidate in objective_names:
+                    continue
+                # Allow names that appear in the grounding support text.
+                if candidate.lower() in support_text.lower():
                     continue
                 if True:
                     issues.append(
