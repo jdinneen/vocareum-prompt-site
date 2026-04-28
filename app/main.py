@@ -469,12 +469,14 @@ def _call_model(req: GenerateRequest, request_id: str, correction_instructions: 
     grounding = load_grounding()
     prompt = _build_user_prompt(req, correction_instructions)
     client = genai.Client(api_key=_require_api_key())
+    # Structured collateral needs higher temperature to avoid premature stopping.
+    temperature = 0.45 if req.asset_type in {"one-pager", "sales-deck-brief"} else 0.25
     response = client.models.generate_content(
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=_system_instruction(grounding["truth_bundle"]),
-            temperature=0.25,
+            temperature=temperature,
             max_output_tokens=_max_output_tokens(req),
         ),
     )
@@ -652,11 +654,30 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     }
 
 
+def _one_pager_missing_sections(text: str) -> list[str]:
+    required = ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "CTA"]
+    return [s for s in required if s not in text]
+
+
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     grounding = load_grounding()
     support_text = _validation_support_text(req)
 
     draft, duration_ms = _call_model(req, request_id)
+
+    # For one-pagers, if the model stopped early (missing sections), retry
+    # with an explicit completion instruction before running validation.
+    if req.asset_type == "one-pager":
+        missing = _one_pager_missing_sections(draft)
+        if missing:
+            completion_fix = (
+                f"The first draft is incomplete. It is missing these required sections: {', '.join(missing)}. "
+                "Generate the COMPLETE one-pager with ALL eight sections. Do not stop early. "
+                "Start from Headline and write through CTA without skipping any section."
+            )
+            draft, extra_ms = _call_model(req, request_id, completion_fix)
+            duration_ms += extra_ms
+
     first_validation = validate_output(
         asset_type=req.asset_type,
         text=draft,
