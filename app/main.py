@@ -93,6 +93,7 @@ def _output_format_instructions(req: GenerateRequest) -> str:
     return (
         "Return structured sales collateral copy with these labeled sections in order: "
         "Headline, Subhead, Core Capabilities, Best-Fit Buyers, Proof, CTA. "
+        "Put each section on its own line with a blank line between sections. "
         "Use concise scan-friendly copy. Use only grounded proof. Proof must be paraphrased and must not contain quotation marks."
     )
 
@@ -215,6 +216,14 @@ def _normalize_sales_collateral(text: str) -> str:
             f"{label}:",
             normalized,
         )
+        normalized = re.sub(
+            rf"(?<!\n)({re.escape(label)}:)",
+            r"\n\1",
+            normalized,
+        )
+    normalized = re.sub(r"(?m)^(Headline:)", r"\1", normalized.lstrip())
+    normalized = re.sub(r"(?m)^([A-Za-z][A-Za-z &-]+:)(\S)", r"\1 \2", normalized)
+    normalized = re.sub(r"\n{3,}", "\n\n", normalized)
     return normalized.strip()
 
 

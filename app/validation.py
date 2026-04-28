@@ -184,14 +184,6 @@ def _extract_name_candidates(sentence: str) -> list[str]:
     return names
 
 
-def _allowed_name_set(truth_bundle: dict, support_text: str, objective_text: str) -> set[str]:
-    allowed = set(truth_bundle.get("approved_named_proof", []))
-    allowed.update(truth_bundle.get("allowed_reference_names", []))
-    allowed.update(_extract_name_candidates(support_text))
-    allowed.update(_extract_name_candidates(objective_text))
-    return {item.strip() for item in allowed if item.strip()}
-
-
 def validate_output(
     *,
     asset_type: str,
@@ -202,7 +194,7 @@ def validate_output(
 ) -> ValidationResult:
     issues: list[ValidationIssue] = []
     allowed_numbers = _allowed_numeric_set(truth_bundle, support_text + "\n" + objective_text)
-    allowed_names = _allowed_name_set(truth_bundle, support_text, objective_text)
+    allowed_proof_names = {item.strip() for item in truth_bundle.get("approved_named_proof", []) if item.strip()}
     support_tokens = _significant_tokens(support_text + "\n" + objective_text)
 
     issues.extend(_quote_issues(text))
@@ -221,7 +213,7 @@ def validate_output(
     for sentence in _sentences(text):
         if _proof_context(sentence):
             for candidate in _extract_name_candidates(sentence):
-                if candidate not in allowed_names:
+                if candidate not in allowed_proof_names:
                     issues.append(
                         ValidationIssue(
                             "disallowed_named_proof",
@@ -229,7 +221,6 @@ def validate_output(
                             sentence[:240],
                         )
                     )
-
         if not _sentence_needs_grounding(sentence):
             continue
         tokens = _significant_tokens(sentence)
