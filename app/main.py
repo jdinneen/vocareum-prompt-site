@@ -195,8 +195,9 @@ def _max_output_tokens(req: GenerateRequest) -> int:
 
 def _structured_brief(req: GenerateRequest) -> str:
     parts: list[str] = []
-    if req.product:
-        parts.append(f"Primary product or surface: {req.product}")
+    product = _resolved_product(req)
+    if product:
+        parts.append(f"Primary product or surface: {product}")
     audience = _resolved_audience(req)
     if audience:
         parts.append(f"Audience: {audience}")
@@ -301,14 +302,23 @@ def _resolved_audience(req: GenerateRequest) -> str:
     return req.audience.strip() or _infer_audience_from_text(req.objective)
 
 
+def _resolved_product(req: GenerateRequest) -> str:
+    explicit = req.product.strip()
+    if explicit:
+        return explicit
+    inferred = matched_products(req.objective)
+    return ", ".join(inferred)
+
+
 def _specificity_score(req: GenerateRequest, output: str) -> tuple[int, list[str]]:
     output_lower = output.lower()
     signals: list[str] = []
     hits = 0
 
-    product_names = matched_products(f"{req.product} {req.objective}")
-    if not product_names and req.product:
-        product_names = [item.strip() for item in req.product.split(",") if item.strip()]
+    product = _resolved_product(req)
+    product_names = matched_products(f"{product} {req.objective}")
+    if not product_names and product:
+        product_names = [item.strip() for item in product.split(",") if item.strip()]
     if product_names and any(name.lower() in output_lower for name in product_names):
         hits += 2
         signals.append("named product match")
@@ -396,14 +406,15 @@ def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") 
     example = resolve_example(req.asset_type, req.objective)
     example_block = example_prompt_block(example).strip() if example else ""
     format_instructions = _output_format_instructions(req)
+    product = _resolved_product(req)
     query_text = req.objective
-    if req.product and req.product.lower() not in query_text.lower():
-        query_text = f"{req.product}. {query_text}"
+    if product and product.lower() not in query_text.lower():
+        query_text = f"{product}. {query_text}"
     grounding = grounding_block(
         query_text,
         req.asset_type,
         example,
-        product=req.product,
+        product=product,
     )
     audience = _resolved_audience(req)
     structured_brief = _structured_brief(req)
@@ -417,6 +428,9 @@ def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") 
         mode_note += f" Keep the named audience explicit in the output: {audience}. Do not replace it with broader generic categories unless the brief explicitly asks for that."
     if audience and req.asset_type == "one-pager":
         mode_note += f" In `Who Uses This`, the first entry must start with `{audience}`."
+    brief_advisory = _brief_needs_more_detail(req)
+    if brief_advisory:
+        mode_note += " The brief is thin or ambiguous. Do your best to infer the user's intent from the wording they gave you. Do not ask follow-up questions. Use the narrowest plausible interpretation, keep claims conservative, and produce the most useful grounded asset you can."
     example_section = f"\n\n{example_block}" if example_block else ""
     return f"""Create a grounded Vocareum deliverable.
 
@@ -672,14 +686,15 @@ def _call_model(req: GenerateRequest, request_id: str, correction_instructions: 
 
 def _validation_support_text(req: GenerateRequest) -> str:
     example = resolve_example(req.asset_type, req.objective)
+    product = _resolved_product(req)
     support = selected_grounding_text(
         req.objective,
         req.asset_type,
         example,
-        product=req.product,
+        product=product,
     )
     return "\n\n".join(
-        part for part in [support, req.objective, req.extra_constraints, req.audience, req.product] if part.strip()
+        part for part in [support, req.objective, req.extra_constraints, _resolved_audience(req), product] if part.strip()
     )
 
 
@@ -830,9 +845,83 @@ def _one_pager_missing_sections(text: str) -> list[str]:
     return [label for label in required if not sections.get(label)]
 
 
+def _critic_review_and_select(
+    req: GenerateRequest,
+    current_text: str,
+    support_text: str,
+    truth_bundle: dict,
+    request_id: str,
+) -> tuple[str, int]:
+    if req.asset_type != "one-pager":
+        return current_text, 0
+
+    base_report = _auto_quality_report(req, current_text, support_text, truth_bundle)
+    audience = _resolved_audience(req)
+    product = _resolved_product(req)
+    critic_notes: list[str] = []
+    if audience:
+        critic_notes.append(f"Keep `{audience}` explicit as the named audience.")
+    if product:
+        critic_notes.append(f"Keep `{product}` explicit as the named product surface.")
+    missing_sections = _one_pager_missing_sections(current_text)
+    if missing_sections:
+        critic_notes.append("Fill every missing or empty labeled section: " + ", ".join(missing_sections) + ".")
+    for item in base_report.get("blockers", [])[:4]:
+        critic_notes.append(item)
+    for item in base_report.get("improvements", [])[:4]:
+        critic_notes.append(item)
+    if not critic_notes:
+        critic_notes.append("Tighten clarity, specificity, and buyer fit without changing grounded facts.")
+
+    correction = (
+        "You are the critic agent reviewing a grounded one-pager draft before it is shown to the user.\n"
+        "Return a revised one-pager only. Keep the same labeled section structure. Do not explain your edits.\n"
+        "Preserve grounded facts, approved stats, and approved proof. Do not invent proof.\n"
+        "Make the copy more specific, sharper, and more audience-aware.\n"
+        "Critic notes:\n"
+        + "\n".join(f"- {note}" for note in critic_notes)
+        + "\n\nCurrent draft:\n"
+        + current_text
+    )
+
+    candidate_text, critic_ms = _call_model(req, request_id, correction)
+    candidate_validation = validate_output(
+        asset_type=req.asset_type,
+        text=candidate_text,
+        support_text=support_text,
+        truth_bundle=truth_bundle,
+        objective_text=req.objective,
+    )
+    if not candidate_validation.ok:
+        return current_text, critic_ms
+
+    candidate_report = _auto_quality_report(req, candidate_text, support_text, truth_bundle)
+    if candidate_report.get("overall_score", 0) >= base_report.get("overall_score", 0):
+        return candidate_text, critic_ms
+    return current_text, critic_ms
+
+
+def _prefer_candidate(
+    req: GenerateRequest,
+    support_text: str,
+    truth_bundle: dict,
+    objective_text: str,
+    candidates: list[tuple[str, object]],
+) -> str:
+    ranked: list[tuple[int, float, int, str]] = []
+    for index, (text, validation) in enumerate(candidates):
+        report = _auto_quality_report(req, text, support_text, truth_bundle)
+        issue_count = len(validation.issues)
+        score = float(report.get("overall_score", 0))
+        ranked.append((issue_count, -score, index, text))
+    ranked.sort()
+    return ranked[0][3]
+
+
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
     grounding = load_grounding()
     support_text = _validation_support_text(req)
+    truth_bundle = grounding["truth_bundle"]
 
     draft, duration_ms = _call_model(req, request_id)
 
@@ -855,11 +944,18 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         asset_type=req.asset_type,
         text=draft,
         support_text=support_text,
-        truth_bundle=grounding["truth_bundle"],
+        truth_bundle=truth_bundle,
         objective_text=req.objective,
     )
     if first_validation.ok:
-        return draft, duration_ms
+        reviewed_text, review_ms = _critic_review_and_select(
+            req,
+            draft,
+            support_text,
+            truth_bundle,
+            request_id,
+        )
+        return reviewed_text, duration_ms + review_ms
 
     fix_lines = "\n".join(f"- {issue.code}: {issue.detail} | {issue.snippet}" for issue in first_validation.issues[:8])
     correction = (
@@ -873,11 +969,18 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         asset_type=req.asset_type,
         text=revised,
         support_text=support_text,
-        truth_bundle=grounding["truth_bundle"],
+        truth_bundle=truth_bundle,
         objective_text=req.objective,
     )
     if second_validation.ok:
-        return revised, duration_ms + second_duration_ms
+        reviewed_text, review_ms = _critic_review_and_select(
+            req,
+            revised,
+            support_text,
+            truth_bundle,
+            request_id,
+        )
+        return reviewed_text, duration_ms + second_duration_ms + review_ms
 
     log.warning(
         "validation_failed request_id=%s asset_type=%s issues=%s",
@@ -885,14 +988,17 @@ def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:
         req.asset_type,
         [issue.code for issue in second_validation.issues],
     )
-    issue_lines = [f"{issue.code}: {issue.detail}" for issue in second_validation.issues[:8]]
-    raise HTTPException(
-        status_code=422,
-        detail={
-            "message": "Generated output failed deterministic validation after correction pass.",
-            "violations": issue_lines,
-        },
+    best_effort = _prefer_candidate(
+        req,
+        support_text,
+        truth_bundle,
+        req.objective,
+        [
+            (draft, first_validation),
+            (revised, second_validation),
+        ],
     )
+    return best_effort, duration_ms + second_duration_ms
 
 
 def _improve_text(
@@ -904,6 +1010,7 @@ def _improve_text(
 ) -> tuple[str, int]:
     grounding = load_grounding()
     support_text = _validation_support_text(req)
+    truth_bundle = grounding["truth_bundle"]
     quality_report = _auto_quality_report(req, current_output, support_text, grounding["truth_bundle"])
     issues = "\n".join(f"- {item}" for item in quality_report.get("blockers", [])[:4])
     suggestions = "\n".join(f"- {item}" for item in quality_report.get("improvements", [])[:4])
@@ -928,18 +1035,28 @@ Produce a better version for the same workflow. Keep only grounded facts. Be mor
         asset_type=req.asset_type,
         text=revised,
         support_text=support_text,
-        truth_bundle=grounding["truth_bundle"],
+        truth_bundle=truth_bundle,
         objective_text=req.objective,
     )
     if not validation.ok:
-        issue_lines = [f"{issue.code}: {issue.detail}" for issue in validation.issues[:8]]
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Improved output failed deterministic validation.",
-                "violations": issue_lines,
-            },
+        current_validation = validate_output(
+            asset_type=req.asset_type,
+            text=current_output,
+            support_text=support_text,
+            truth_bundle=truth_bundle,
+            objective_text=req.objective,
         )
+        best_effort = _prefer_candidate(
+            req,
+            support_text,
+            truth_bundle,
+            req.objective,
+            [
+                (current_output, current_validation),
+                (revised, validation),
+            ],
+        )
+        return best_effort, duration_ms
     return revised, duration_ms
 
 
@@ -987,9 +1104,6 @@ def source_refresh() -> dict:
 def generate(req: GenerateRequest) -> GenerateResponse:
     data = load_grounding()
     request_id = uuid.uuid4().hex[:12]
-    brief_problem = _brief_needs_more_detail(req)
-    if brief_problem:
-        raise HTTPException(status_code=422, detail=brief_problem)
     try:
         output, duration_ms = _generate_text(req, request_id)
     except Exception:
@@ -1021,9 +1135,6 @@ def generate(req: GenerateRequest) -> GenerateResponse:
 def improve(req: ImproveRequest) -> GenerateResponse:
     data = load_grounding()
     request_id = uuid.uuid4().hex[:12]
-    brief_problem = _brief_needs_more_detail(req.request)
-    if brief_problem:
-        raise HTTPException(status_code=422, detail=brief_problem)
     try:
         output, duration_ms = _improve_text(
             req.request,

@@ -485,7 +485,7 @@ def test_source_refresh_endpoint_forces_live_reload(monkeypatch):
     assert calls == [True]
 
 
-def test_generate_endpoint_returns_brief_error_for_thin_prompt(monkeypatch):
+def test_generate_endpoint_allows_thin_prompt_best_effort(monkeypatch):
     monkeypatch.setattr(
         "app.main.load_grounding",
         lambda force=False: {
@@ -497,6 +497,7 @@ def test_generate_endpoint_returns_brief_error_for_thin_prompt(monkeypatch):
             "style_palette": {"slate": "#2e3a41"},
         },
     )
+    monkeypatch.setattr("app.main._generate_text", lambda req, request_id: ("Subject: Test\n\nBody", 120))
     client = TestClient(app)
     response = client.post(
         "/api/generate",
@@ -508,8 +509,8 @@ def test_generate_endpoint_returns_brief_error_for_thin_prompt(monkeypatch):
             "audience": "aws",
         },
     )
-    assert response.status_code == 422
-    assert "too thin" in response.json()["detail"]["message"].lower()
+    assert response.status_code == 200
+    assert response.json()["output"].startswith("Subject: Test")
 
 
 def test_workflow_output_budgets_match_current_contract():
