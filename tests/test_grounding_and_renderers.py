@@ -131,6 +131,40 @@ def test_grounded_answer_prompt_stays_generic(monkeypatch):
     assert "No explicit example pattern available." not in prompt
 
 
+def test_one_pager_prompt_keeps_inferred_audience_explicit(monkeypatch):
+    monkeypatch.setattr(
+        "app.grounding.load_grounding",
+        lambda: {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+            },
+            "mode": "live",
+            "warnings": [],
+            "catalog_front_matter": "Catalog front matter",
+            "catalog_sections": {"Simulations": "Simulations\nGrounded section"},
+            "email_sections": {},
+            "collateral_examples": {},
+            "truth_bundle": {
+                "default_public_stats": ["2M+ AWS learners"],
+                "approved_named_proof": ["AWS Academy"],
+            },
+            "style_palette": {},
+        },
+    )
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="Simulations",
+        objective="Create a concise one-pager content packet based on this brief: I need a one sided one sheeter for simulations for coursera",
+    )
+
+    prompt = _build_user_prompt(req)
+
+    assert "Audience: coursera" in prompt
+    assert "Keep the named audience explicit in the output: coursera." in prompt
+
+
 def test_reply_post_process_adds_missing_scheduling_response():
     req = GenerateRequest(
         asset_type="reply-email",

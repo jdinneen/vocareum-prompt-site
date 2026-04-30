@@ -155,7 +155,8 @@ def _output_format_instructions(req: GenerateRequest) -> str:
             "Proof: 1-2 sentences of grounded paraphrased proof\n"
             "CTA: one clear next-step sentence\n\n"
             "Put each section label at the start of its own line followed by the content. "
-            "Keep copy concise and scan-friendly. Use only grounded proof."
+            "Keep copy concise and scan-friendly. Use only grounded proof. "
+            "If the brief names a company, institution, or partner, keep that audience explicit in the Subhead and Who Uses This sections instead of broadening it into generic sectors."
         )
     if req.asset_type == "sales-deck-brief":
         return (
@@ -403,6 +404,7 @@ def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") 
         example,
         product=req.product,
     )
+    audience = _resolved_audience(req)
     structured_brief = _structured_brief(req)
     if req.asset_type == "reply-email":
         mode_note = "If the user pasted an email thread, treat it as user-provided context and write only the best reply. Explicitly identify every concrete ask in the thread and answer each one."
@@ -410,6 +412,8 @@ def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") 
         mode_note = "Answer directly from the grounding. If the request asks for copy, write the requested copy. If support is unclear, leave the claim out."
     else:
         mode_note = "Write directly for the requested workflow."
+    if audience and req.asset_type in {"sales-collateral", "one-pager", "sales-deck-brief", "outbound-email"}:
+        mode_note += f" Keep the named audience explicit in the output: {audience}. Do not replace it with broader generic categories unless the brief explicitly asks for that."
     example_section = f"\n\n{example_block}" if example_block else ""
     return f"""Create a grounded Vocareum deliverable.
 
@@ -417,7 +421,7 @@ Workflow: {req.asset_type}
 Objective / thread / brief:
 {req.objective}
 
-Audience: {_resolved_audience(req) or "Not specified"}
+Audience: {audience or "Not specified"}
 Constraints: {req.extra_constraints or "None"}
 Format instructions: {format_instructions}
 Structured brief:
