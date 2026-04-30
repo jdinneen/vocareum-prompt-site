@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.examples import DELIVERABLE_TYPES, EXAMPLE_PATTERNS
+from app.examples import DELIVERABLE_TYPES, EXAMPLE_PATTERNS, resolve_example
 from app.grounding import SOURCE_TITLE, grounding_block
 from app.main import (
     GenerateRequest,
@@ -344,6 +344,13 @@ def test_one_pager_prompt_prefers_none_over_placeholder_proof(monkeypatch):
     assert "Do not use source metadata, review dates, catalog names, or workflow/category placeholders as proof." in prompt
 
 
+def test_resolve_example_uses_reference_one_pager_for_general_one_pager():
+    example = resolve_example("one-pager", "Build a one-pager for Simulations for Coursera.")
+
+    assert example is not None
+    assert example["id"] == "reference-one-pager"
+
+
 def test_one_pager_quality_penalizes_placeholder_proof_and_audience_drift():
     req = GenerateRequest(
         asset_type="one-pager",
@@ -406,6 +413,29 @@ def test_sanitize_one_pager_output_keeps_named_audience_and_none_proof():
     assert "Proof: None" in sanitized
     assert "source docs" not in sanitized
     assert "Quote: None" in sanitized
+
+
+def test_sanitize_one_pager_output_drops_product_coined_buyer_label():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="AI Gateway",
+        objective="Build a one-pager for AI Gateway aimed at provost-level academic leaders.",
+    )
+    output = (
+        "Headline: Governed AI Access for Academic Programs\n"
+        "Subhead: AI Gateway gives institutions governed model access.\n"
+        "Stat Bar: 5M+ - total platform learners\n"
+        "Problem: Institutions need governed access.\n"
+        "How It Works: Route models | Apply budgets | Review usage\n"
+        "Who Uses This: Provost-level academic leaders | Teaching and learning teams | Gateway-course owners\n"
+        "Proof: None\n"
+        "Quote: None\n"
+        "CTA: Contact Vocareum to review fit."
+    )
+
+    sanitized = _sanitize_one_pager_output(req, output)
+
+    assert "Gateway-course owners" not in sanitized
 
 
 def test_one_pager_without_named_proof_is_not_strong():
@@ -644,6 +674,52 @@ def test_generate_endpoint_allows_thin_prompt_best_effort(monkeypatch):
     )
     assert response.status_code == 200
     assert response.json()["output"].startswith("Subject: Test")
+
+
+def test_generate_one_pager_returns_canonical_content_packet(monkeypatch):
+    monkeypatch.setattr(
+        "app.main.load_grounding",
+        lambda force=False: {
+            "source": {"title": SOURCE_TITLE, "last_reviewed": "2026-04-27", "doc_url": "https://example.com/catalog"},
+            "mode": "live",
+            "warnings": [],
+            "catalog_sections": {"Simulations": "section"},
+            "truth_bundle": {"default_public_stats": []},
+            "style_palette": {"slate": "#2e3a41"},
+        },
+    )
+    monkeypatch.setattr(
+        "app.main._generate_text",
+        lambda req, request_id: (
+            "Headline: Deliver AI-Generated Scenario Practice for Coursera Learners\n"
+            "Subhead: Simulations provide Coursera with controlled practice environments.\n"
+            "Stat Bar: 1M+ - annual unique learners | 7,000+ - institutions and organizations\n"
+            "Problem: Learners need scenario-based practice before live use.\n"
+            "How It Works: Generate scenarios | Practice decisions | Capture evidence\n"
+            "Who Uses This: Coursera\n"
+            "Proof: None\n"
+            "Quote: None\n"
+            "CTA: Learn how to integrate AI-generated simulations into your courses.",
+            120,
+        ),
+    )
+    client = TestClient(app)
+    response = client.post(
+        "/api/generate",
+        json={
+            "asset_type": "one-pager",
+            "product": "Simulations",
+            "objective": "Build a one-pager for Simulations for Coursera.",
+            "extra_constraints": "",
+            "audience": "Coursera",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["content_packet"]["headline"] == "Deliver AI-Generated Scenario Practice for Coursera Learners"
+    assert payload["content_packet"]["audiences"] == ["Coursera"]
+    assert payload["content_packet"]["proofs"] == []
 
 
 def test_workflow_output_budgets_match_current_contract():

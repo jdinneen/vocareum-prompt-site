@@ -45,6 +45,7 @@ class GenerateResponse(BaseModel):
     rendered_html: str | None = None
     rendered_kind: str | None = None
     rendered_title: str | None = None
+    content_packet: dict | None = None
     quality_report: dict = Field(default_factory=dict)
 
 
@@ -564,6 +565,47 @@ def _replace_labeled_section(text: str, label: str, new_body: str) -> str:
     return pattern.sub(replacement, text, count=1)
 
 
+def _split_packet_dash_entries(value: str) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    for item in _section_items(value):
+        match = re.search(r"\s[-:]\s", item)
+        if not match:
+            entries.append({"value": item.strip(), "label": ""})
+            continue
+        split_at = match.start()
+        entries.append({
+            "value": item[:split_at].strip(),
+            "label": item[split_at + 3 :].strip(),
+        })
+    return entries
+
+
+def _build_one_pager_packet(text: str) -> dict | None:
+    sections = _extract_labeled_sections(
+        text,
+        ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+    )
+    required = ["Headline", "Subhead", "Problem", "How It Works", "Who Uses This", "Proof", "CTA"]
+    if any(not sections.get(label) for label in required):
+        return None
+
+    return {
+        "headline": sections.get("Headline", ""),
+        "subhead": sections.get("Subhead", ""),
+        "stats": _split_packet_dash_entries(sections.get("Stat Bar", ""))[:4],
+        "problem": sections.get("Problem", ""),
+        "steps": _section_items(sections.get("How It Works", ""))[:4],
+        "audiences": _section_items(sections.get("Who Uses This", ""))[:4],
+        "proofs": [
+            {"reference": item["value"], "signal": item["label"]}
+            for item in _split_packet_dash_entries(sections.get("Proof", ""))[:4]
+            if item["value"] and not _none_like(item["value"])
+        ],
+        "quote": "" if _none_like(sections.get("Quote", "")) else sections.get("Quote", ""),
+        "cta": sections.get("CTA", ""),
+    }
+
+
 def _sanitize_one_pager_output(req: GenerateRequest, text: str) -> str:
     sections = _extract_labeled_sections(
         text,
@@ -585,6 +627,10 @@ def _sanitize_one_pager_output(req: GenerateRequest, text: str) -> str:
             audience_entries = overlapping
         elif sections.get("Who Uses This", ""):
             audience_entries = [audience]
+    audience_entries = [
+        item for item in audience_entries
+        if not _looks_like_product_coined_audience(req, item)
+    ]
     if audience_entries:
         updated = _replace_labeled_section(updated, "Who Uses This", " | ".join(audience_entries[:3]))
 
@@ -783,6 +829,11 @@ ONE_PAGER_AUDIENCE_STOPWORDS = {
     "leaders", "of", "or", "product", "role", "roles", "target", "team",
     "teams", "the", "title", "titles",
 }
+PRODUCT_COINED_AUDIENCE_ROLE_WORDS = {
+    "admin", "admins", "champion", "champions", "course", "courses", "lead",
+    "leads", "leader", "leaders", "manager", "managers", "owner", "owners",
+    "team", "teams",
+}
 
 
 def _section_items(section_body: str) -> list[str]:
@@ -811,6 +862,28 @@ def _proof_entry_is_placeholder(entry: str) -> bool:
     if _none_like(entry):
         return True
     return any(pattern.search(entry) for pattern in ONE_PAGER_PLACEHOLDER_PROOF_PATTERNS)
+
+
+def _looks_like_product_coined_audience(req: GenerateRequest, entry: str) -> bool:
+    lowered_entry = entry.lower()
+    if lowered_entry in req.objective.lower():
+        return False
+
+    product_tokens = [
+        token for token in _meaningful_phrase_tokens(_resolved_product(req))
+        if token not in {"vocareum", "platform"}
+    ]
+    if not product_tokens:
+        return False
+
+    entry_tokens = _meaningful_phrase_tokens(entry)
+    if not entry_tokens:
+        return False
+
+    product_overlap = entry_tokens & set(product_tokens)
+    role_overlap = entry_tokens & PRODUCT_COINED_AUDIENCE_ROLE_WORDS
+    hyphenated = "-" in entry and bool(product_overlap)
+    return bool(product_overlap and role_overlap) or hyphenated
 
 
 def _one_pager_quality_flags(req: GenerateRequest, output: str) -> dict:
@@ -1012,6 +1085,7 @@ def _critic_review_and_select(
         critic_notes.append(f"Keep `{product}` explicit as the named product surface.")
     critic_notes.append("If there is no approved named public proof, write `Proof: None` instead of using source metadata or placeholders.")
     critic_notes.append("Do not invent extra sectors, departments, or buyer groups when the brief only names one audience.")
+    critic_notes.append("Do not coin buyer labels from product names, internal jargon, or hyphenated product-role mashups.")
     missing_sections = _one_pager_missing_sections(current_text)
     if missing_sections:
         critic_notes.append("Fill every missing or empty labeled section: " + ", ".join(missing_sections) + ".")
@@ -1021,6 +1095,15 @@ def _critic_review_and_select(
         critic_notes.append(item)
     if not critic_notes:
         critic_notes.append("Tighten clarity, specificity, and buyer fit without changing grounded facts.")
+    one_pager_flags = _one_pager_quality_flags(req, current_text)
+    if (
+        base_report.get("status") == "strong"
+        and not base_report.get("blockers")
+        and not one_pager_flags.get("audience_drift")
+        and not one_pager_flags.get("placeholder_proof")
+        and one_pager_flags.get("has_named_proof")
+    ):
+        return current_text, 0
 
     correction = (
         "You are the critic agent reviewing a grounded one-pager draft before it is shown to the user.\n"
@@ -1259,6 +1342,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         log.exception("generate_failed request_id=%s model=%s", request_id, _model_name())
         raise
     rendered = render_collateral(req.asset_type, output)
+    content_packet = _build_one_pager_packet(output) if req.asset_type == "one-pager" else None
     quality_report = _auto_quality_report(
         req,
         output,
@@ -1276,6 +1360,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         rendered_html=rendered["html"] if rendered else None,
         rendered_kind=rendered["kind"] if rendered else None,
         rendered_title=rendered["title"] if rendered else None,
+        content_packet=content_packet,
         quality_report=quality_report,
     )
 
@@ -1296,6 +1381,7 @@ def improve(req: ImproveRequest) -> GenerateResponse:
         log.exception("improve_failed request_id=%s model=%s", request_id, _model_name())
         raise
     rendered = render_collateral(req.request.asset_type, output)
+    content_packet = _build_one_pager_packet(output) if req.request.asset_type == "one-pager" else None
     quality_report = _auto_quality_report(
         req.request,
         output,
@@ -1313,5 +1399,6 @@ def improve(req: ImproveRequest) -> GenerateResponse:
         rendered_html=rendered["html"] if rendered else None,
         rendered_kind=rendered["kind"] if rendered else None,
         rendered_title=rendered["title"] if rendered else None,
+        content_packet=content_packet,
         quality_report=quality_report,
     )

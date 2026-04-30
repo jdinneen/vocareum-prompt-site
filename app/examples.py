@@ -161,7 +161,7 @@ EXAMPLE_PATTERNS = [
         "id": "aws-cosell-one-pager",
         "label": "AWS co-sell one-pager",
         "group": "collateral",
-        "asset_types": ["sales-collateral"],
+        "asset_types": ["sales-collateral", "one-pager"],
         "use_when": "You need a one-page product or solution asset with a sharp hero, stat bar, workflow, proof, and partner/customer value split.",
         "structure": [
             "Lead with a clear audience and value proposition.",
@@ -181,7 +181,7 @@ EXAMPLE_PATTERNS = [
         "id": "method-one-pager",
         "label": "Methodology one-pager",
         "group": "collateral",
-        "asset_types": ["sales-collateral"],
+        "asset_types": ["sales-collateral", "one-pager"],
         "use_when": "You need a one-pager centered on a method, process, or repeatable operating model.",
         "structure": [
             "Lead with one hero proof anchor.",
@@ -196,6 +196,30 @@ EXAMPLE_PATTERNS = [
             "Do not bury the method under generic company description.",
         ],
         "source": "Reference Collateral: Learning Flow Method One-Pager",
+    },
+    {
+        "id": "reference-one-pager",
+        "label": "Reference one-pager",
+        "group": "collateral",
+        "asset_types": ["one-pager"],
+        "use_when": "You need a CEO-ready one-pager with a crisp buyer story, grounded proof discipline, and one clean CTA.",
+        "structure": [
+            "Lead with one named audience and one clear outcome.",
+            "Use 1 to 3 credible buyer roles only when the brief or grounding supports them.",
+            "Keep proof disciplined: one approved named proof when available, otherwise `Proof: None`.",
+            "Close with a single next step.",
+        ],
+        "claims_to_keep": [
+            "Named audience specificity.",
+            "Approved public stats only when they help the story.",
+            "Grounded operating-model language.",
+        ],
+        "claims_to_avoid": [
+            "Do not coin buyer labels from product names or internal jargon.",
+            "Do not broaden one named audience into generic sectors.",
+            "Do not use placeholder proof, source metadata, or process language as public proof.",
+        ],
+        "source": "Reference Collateral: Learning Flow Method One-Pager + Vocareum Overview Q1 2026",
     },
     {
         "id": "product-overview",
@@ -267,7 +291,14 @@ def resolve_example(asset_type: str, objective: str) -> dict | None:
             return example_map()["partner-case-study"]
         return example_map()["short-demo-follow-up"]
 
-    if asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}:
+    if asset_type == "one-pager":
+        if any(term in lowered for term in ("aws", "co-sell", "on-the-fly")):
+            return example_map()["aws-cosell-one-pager"]
+        if any(term in lowered for term in ("method", "workflow", "operating model")):
+            return example_map()["method-one-pager"]
+        return example_map()["reference-one-pager"]
+
+    if asset_type in {"sales-collateral", "sales-deck-brief"}:
         if any(term in lowered for term in ("aws", "co-sell", "on-the-fly")):
             return example_map()["aws-cosell-one-pager"]
         if any(term in lowered for term in ("method", "workflow", "operating model")):
