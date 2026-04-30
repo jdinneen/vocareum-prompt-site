@@ -232,6 +232,13 @@ ONE_PAGER_DEFAULT_BUYERS = {
     ],
 }
 
+ONE_PAGER_CANONICAL_STATS = {
+    "aws learners": {"value": "2M+", "label": "AWS learners"},
+    "annual unique learners": {"value": "1M+", "label": "Annual unique learners"},
+    "total platform learners": {"value": "5M+", "label": "Total platform learners"},
+    "institutions and organizations": {"value": "7,000+", "label": "Institutions and organizations"},
+}
+
 
 class GenerateRequest(BaseModel):
     asset_type: Literal["grounded-answer", "outbound-email", "reply-email", "sales-collateral", "one-pager", "sales-deck-brief"] = Field(default="outbound-email")
@@ -1192,6 +1199,15 @@ def _proof_matches_request_family(req: GenerateRequest, proof: dict) -> bool:
     return True
 
 
+def _one_pager_stat_bar(req: GenerateRequest) -> list[dict[str, str]]:
+    lowered = _one_pager_request_text(req)
+    if "aws" in lowered:
+        order = ["aws learners", "annual unique learners", "total platform learners"]
+    else:
+        order = ["institutions and organizations", "annual unique learners", "total platform learners"]
+    return [dict(ONE_PAGER_CANONICAL_STATS[key]) for key in order]
+
+
 def _one_pager_best_fit_entries(req: GenerateRequest, entries: list[str]) -> list[str]:
     explicit_audience = _resolved_audience(req)
     cleaned = [
@@ -1385,15 +1401,12 @@ def _one_pager_footer_quote(req: GenerateRequest, proof_cards: list[dict]) -> di
 
 
 def _one_pager_credibility_bar(req: GenerateRequest, proof_cards: list[dict]) -> list[str]:
-    items = [
-        "5M+ total platform learners",
+    return [
         "7,000+ institutions and organizations",
+        "5M+ total platform learners",
         "SOC 2 Type II, FERPA, GDPR",
         "AWS, Azure, GCP, Databricks",
     ]
-    if proof_cards:
-        items[0] = "Selected customer and partner proof"
-    return items
 
 
 def _enrich_one_pager_packet(req: GenerateRequest, packet: dict | None) -> dict | None:
@@ -1419,6 +1432,7 @@ def _enrich_one_pager_packet(req: GenerateRequest, packet: dict | None) -> dict 
     packet["steps_heading"] = "How Vocareum helps"
     packet["proof_heading"] = "Related proof in market" if proof_cards and not packet["proofs"] else "Why believe this"
     packet["cta_label"] = "Next business step"
+    packet["stats"] = _one_pager_stat_bar(req)
     packet["proof_cards"] = proof_cards
     packet["logo_strip"] = _one_pager_logo_strip(req, proof_cards)
     packet["credibility_bar"] = _one_pager_credibility_bar(req, proof_cards)

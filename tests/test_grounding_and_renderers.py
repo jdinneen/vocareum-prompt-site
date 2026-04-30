@@ -747,6 +747,12 @@ def test_one_pager_enrichment_keeps_named_audience_without_default_backfill():
     assert packet["audiences"] == ["7NRP"]
     assert [card["organization"] for card in packet["proof_cards"]] == ["National Research Platform"]
     assert packet["proofs"] == []
+    assert packet["stats"] == [
+        {"value": "7,000+", "label": "Institutions and organizations"},
+        {"value": "1M+", "label": "Annual unique learners"},
+        {"value": "5M+", "label": "Total platform learners"},
+    ]
+    assert packet["credibility_bar"][0] == "7,000+ institutions and organizations"
     assert packet["logo_strip"] == []
     assert packet["footer_quote"] is None
 
@@ -773,6 +779,7 @@ def test_one_pager_enrichment_prefers_nrp_alias_over_generic_learning_proof():
 
     assert packet["audiences"] == ["7NRP"]
     assert [card["organization"] for card in packet["proof_cards"]] == ["National Research Platform"]
+    assert packet["stats"][0] == {"value": "7,000+", "label": "Institutions and organizations"}
     assert packet["logo_strip"] == []
     assert packet["footer_quote"] is None
 
