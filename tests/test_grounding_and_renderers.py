@@ -211,6 +211,41 @@ def test_auto_quality_report_flags_missing_schedule_completion():
     assert any("scheduling ask" in item.lower() for item in report["blockers"])
 
 
+def test_one_pager_quality_uses_objective_context_and_cta():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="AI Gateway, GPU & CPU Compute",
+        objective="Build a two-sided one-pager for AI Gateway and GPU & CPU Compute aimed at National Research Platform university partners and research-computing leaders evaluating governed AI access for faculty and students.",
+    )
+    output = (
+        "Headline: Governed AI Access and Scalable Compute for Research and Education\n"
+        "Subhead: Provide controlled access to leading AI models and dedicated high-performance compute resources for faculty and students.\n"
+        "Stat Bar: 1M+::annual unique learners | 7,000+::institutions and organizations\n"
+        "Problem: Research institutions need secure AI model access and scalable compute.\n"
+        "How It Works: Centralize AI access | Scale compute | Track spend\n"
+        "Who Uses This: Research-computing leaders::for governed compute | University partners::for AI access\n"
+        "Proof: University of Michigan::campus-wide AI Gateway rollout | National Research Platform::governed compute delivery\n"
+        "Quote: Not available\n"
+        "CTA: Contact us to scope the right governed AI and compute path."
+    )
+    report = _auto_quality_report(
+        req,
+        output,
+        "AI Gateway provides governed model access. GPU & CPU Compute provides scalable compute. University of Michigan and National Research Platform are approved proof.",
+        {
+            "approved_numeric_claims": ["1M+", "7,000+"],
+            "default_public_stats": ["1M+ annual unique learners", "7,000+ institutions and organizations"],
+            "approved_named_proof": ["University of Michigan", "National Research Platform"],
+        },
+    )
+
+    specificity = next(item for item in report["scores"] if item["id"] == "specificity")
+    actionability = next(item for item in report["scores"] if item["id"] == "actionability")
+
+    assert specificity["score"] >= 4
+    assert actionability["score"] == 5
+
+
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
     monkeypatch.setattr(
         "app.grounding.load_grounding",

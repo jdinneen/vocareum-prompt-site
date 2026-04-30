@@ -204,6 +204,65 @@ def _objective_tokens(text: str) -> list[str]:
     return re.findall(r"[A-Za-z0-9@.+-]{2,}", text)
 
 
+SPECIFICITY_STOPWORDS = {
+    "about",
+    "aimed",
+    "asset",
+    "based",
+    "brief",
+    "build",
+    "collateral",
+    "concise",
+    "content",
+    "create",
+    "follow",
+    "include",
+    "need",
+    "one",
+    "pager",
+    "packet",
+    "sentences",
+    "short",
+    "sided",
+    "this",
+    "two",
+    "want",
+}
+
+
+def _specificity_score(req: GenerateRequest, output: str) -> tuple[int, list[str]]:
+    output_lower = output.lower()
+    signals: list[str] = []
+    hits = 0
+
+    product_names = matched_products(f"{req.product} {req.objective}")
+    if not product_names and req.product:
+        product_names = [item.strip() for item in req.product.split(",") if item.strip()]
+    if product_names and any(name.lower() in output_lower for name in product_names):
+        hits += 2
+        signals.append("named product match")
+
+    specificity_source = req.audience or req.objective
+    objective_terms: list[str] = []
+    for token in _objective_tokens(specificity_source):
+        lowered = token.lower()
+        if len(lowered) < 5 or lowered in SPECIFICITY_STOPWORDS:
+            continue
+        if lowered not in objective_terms:
+            objective_terms.append(lowered)
+    matched_terms = [token for token in objective_terms[:8] if token in output_lower]
+    if len(matched_terms) >= 2:
+        hits += 2
+        signals.append("audience/context term match")
+
+    if len(output.split()) > 50:
+        hits += 1
+        signals.append("substantive length")
+
+    score = max(1, min(5, hits + 1))
+    return score, signals
+
+
 def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
     objective = req.objective.strip()
     lower = objective.lower()
@@ -574,14 +633,7 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     scores.append({"id": "grounding", "label": "Grounding safety", "score": grounding_score})
 
     if req.asset_type == "grounded-answer":
-        specificity_hits = 0
-        if req.product and req.product.lower() in output.lower():
-            specificity_hits += 2
-        if req.audience and any(token.lower() in output.lower() for token in _objective_tokens(req.audience)[:4]):
-            specificity_hits += 2
-        if len(output.split()) > 50:
-            specificity_hits += 1
-        specificity_score = max(1, min(5, specificity_hits + 1))
+        specificity_score, _signals = _specificity_score(req, output)
         if specificity_score >= 4:
             strengths.append("Response is specific to the prompt.")
         else:
@@ -632,14 +684,7 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
             improvements.append("Return a full send-ready email with subject line.")
     scores.append({"id": "workflow", "label": "Workflow fit", "score": workflow_score})
 
-    specificity_hits = 0
-    if req.product and req.product.lower() in output.lower():
-        specificity_hits += 2
-    if req.audience and any(token.lower() in output.lower() for token in _objective_tokens(req.audience)[:4]):
-        specificity_hits += 2
-    if len(output.split()) > 80:
-        specificity_hits += 1
-    specificity_score = max(1, min(5, specificity_hits + 1))
+    specificity_score, _signals = _specificity_score(req, output)
     if specificity_score >= 4:
         strengths.append("Output is specific to the requested product or audience.")
     else:
@@ -649,6 +694,10 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     actionability_score = 3
     if req.asset_type == "sales-collateral":
         actionability_score = 5 if "CTA:" in output else 2
+    elif req.asset_type == "one-pager":
+        cta_match = re.search(r"(?ms)^CTA:\s*(.+)$", output)
+        cta_text = cta_match.group(1).strip() if cta_match else ""
+        actionability_score = 5 if cta_text and cta_text.lower() != "not available" else 2
     else:
         has_next_step = any(term in output.lower() for term in ("meeting", "follow-up", "calendar", "demo", "let me know", "suggest an alternative"))
         if _detect_schedule_ask(req.objective):
