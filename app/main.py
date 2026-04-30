@@ -195,8 +195,9 @@ def _structured_brief(req: GenerateRequest) -> str:
     parts: list[str] = []
     if req.product:
         parts.append(f"Primary product or surface: {req.product}")
-    if req.audience:
-        parts.append(f"Audience: {req.audience}")
+    audience = _resolved_audience(req)
+    if audience:
+        parts.append(f"Audience: {audience}")
     return "\n".join(parts)
 
 
@@ -228,6 +229,74 @@ SPECIFICITY_STOPWORDS = {
     "two",
     "want",
 }
+AUDIENCE_CUE_PATTERNS = (
+    re.compile(r"\baimed at\s+(.+?)(?=\b(?:for|aimed at|targeted at|targeting)\b|[,.;]|$)", re.IGNORECASE),
+    re.compile(r"\btargeted at\s+(.+?)(?=\b(?:for|aimed at|targeted at|targeting)\b|[,.;]|$)", re.IGNORECASE),
+    re.compile(r"\btargeting\s+(.+?)(?=\b(?:for|aimed at|targeted at|targeting)\b|[,.;]|$)", re.IGNORECASE),
+    re.compile(r"\bfor\s+(.+?)(?=\b(?:for|aimed at|targeted at|targeting)\b|[,.;]|$)", re.IGNORECASE),
+)
+GENERIC_AUDIENCE_TOKENS = {
+    "a",
+    "an",
+    "and",
+    "asset",
+    "brief",
+    "build",
+    "collateral",
+    "concise",
+    "content",
+    "create",
+    "deck",
+    "need",
+    "one",
+    "page",
+    "pager",
+    "packet",
+    "sales",
+    "sentence",
+    "sentences",
+    "sheet",
+    "sheeter",
+    "short",
+    "side",
+    "sided",
+    "simulation",
+    "simulations",
+    "the",
+    "this",
+    "two",
+    "write",
+}
+
+
+def _normalized_phrase(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _infer_audience_from_text(text: str) -> str:
+    candidates: list[tuple[int, str]] = []
+    for pattern in AUDIENCE_CUE_PATTERNS:
+        for match in pattern.finditer(text):
+            candidate = re.sub(r"\s+", " ", match.group(1)).strip(" ,.;:-")
+            candidate = re.sub(r"^(?:a|an|the)\s+", "", candidate, flags=re.IGNORECASE).strip()
+            if candidate:
+                candidates.append((match.start(), candidate))
+
+    for _position, candidate in sorted(candidates, key=lambda item: item[0], reverse=True):
+        normalized = _normalized_phrase(candidate)
+        if len(normalized) < 3:
+            continue
+        if matched_products(candidate):
+            continue
+        tokens = [token for token in normalized.split() if token]
+        if tokens and all(token in GENERIC_AUDIENCE_TOKENS for token in tokens):
+            continue
+        return candidate
+    return ""
+
+
+def _resolved_audience(req: GenerateRequest) -> str:
+    return req.audience.strip() or _infer_audience_from_text(req.objective)
 
 
 def _specificity_score(req: GenerateRequest, output: str) -> tuple[int, list[str]]:
@@ -242,7 +311,7 @@ def _specificity_score(req: GenerateRequest, output: str) -> tuple[int, list[str
         hits += 2
         signals.append("named product match")
 
-    specificity_source = req.audience or req.objective
+    specificity_source = _resolved_audience(req) or req.objective
     objective_terms: list[str] = []
     for token in _objective_tokens(specificity_source):
         lowered = token.lower()
@@ -267,6 +336,7 @@ def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
     objective = req.objective.strip()
     lower = objective.lower()
     tokens = _objective_tokens(objective)
+    audience = _resolved_audience(req)
     missing: list[str] = []
     examples: list[str] = []
 
@@ -275,7 +345,7 @@ def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
     effective_tokens = len(tokens)
     if req.product:
         effective_tokens += 2
-    if req.audience:
+    if audience:
         effective_tokens += 2
 
     if effective_tokens < 5:
@@ -288,7 +358,7 @@ def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
     elif req.asset_type == "outbound-email":
         if not req.product:
             missing.append("which product or surface this email is about")
-        if not req.audience and not any(term in lower for term in ("buyer", "lead", "team", "director", "vp", "head")):
+        if not audience and not any(term in lower for term in ("buyer", "lead", "team", "director", "vp", "head")):
             missing.append("who the email is for")
         if not any(term in lower for term in ("ask", "meeting", "demo", "follow-up", "intro", "reach out", "write")):
             missing.append("what the email should try to accomplish")
@@ -300,7 +370,7 @@ def _brief_needs_more_detail(req: GenerateRequest) -> dict | None:
     elif req.asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}:
         if not req.product:
             missing.append("which product or surface the collateral is for")
-        if not req.audience and not any(term in lower for term in ("buyer", "audience", "architect", "leader", "team", "platform")):
+        if not audience and not any(term in lower for term in ("buyer", "audience", "architect", "leader", "team", "platform")):
             missing.append("who the collateral is for")
         if req.asset_type == "one-pager":
             examples.append("Build a one-pager for On-the-Fly Labs aimed at AWS solutions architects running customer workshops.")
@@ -347,7 +417,7 @@ Workflow: {req.asset_type}
 Objective / thread / brief:
 {req.objective}
 
-Audience: {req.audience or "Not specified"}
+Audience: {_resolved_audience(req) or "Not specified"}
 Constraints: {req.extra_constraints or "None"}
 Format instructions: {format_instructions}
 Structured brief:

@@ -170,6 +170,17 @@ def test_brief_check_rejects_too_short_grounded_answer():
     assert "too thin" in result["message"].lower()
 
 
+def test_one_pager_brief_accepts_audience_in_freeform_for_phrase():
+    result = _brief_needs_more_detail(
+        GenerateRequest(
+            asset_type="one-pager",
+            product="Simulations",
+            objective="Create a concise one-pager content packet based on this brief: I need a one sided one sheeter for simulations for coursera",
+        )
+    )
+    assert result is None
+
+
 def test_outbound_post_process_adds_goal_based_next_step():
     req = GenerateRequest(
         asset_type="outbound-email",
