@@ -745,6 +745,34 @@ def test_one_pager_enrichment_keeps_named_audience_without_default_backfill():
     )
 
     assert packet["audiences"] == ["7NRP"]
+    assert [card["organization"] for card in packet["proof_cards"]] == ["National Research Platform"]
+    assert packet["proofs"] == []
+    assert packet["logo_strip"] == []
+    assert packet["footer_quote"] is None
+
+
+def test_one_pager_enrichment_prefers_nrp_alias_over_generic_learning_proof():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="GPU & CPU Compute",
+        audience="7NRP",
+        objective="Build a one-pager for GPU & CPU Compute for 7NRP focused on advanced AI research and scientific simulation workloads.",
+    )
+    packet = _enrich_one_pager_packet(
+        req,
+        {
+            "audiences": ["7NRP"],
+            "proofs": [],
+            "headline": "Headline",
+            "subhead": "Subhead",
+            "problem": "Problem",
+            "steps": ["Step one", "Step two", "Step three"],
+            "cta": "Review fit for governed research compute.",
+        },
+    )
+
+    assert packet["audiences"] == ["7NRP"]
+    assert [card["organization"] for card in packet["proof_cards"]] == ["National Research Platform"]
     assert packet["logo_strip"] == []
     assert packet["footer_quote"] is None
 

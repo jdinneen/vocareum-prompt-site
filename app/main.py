@@ -156,6 +156,44 @@ DEFAULT_ONE_PAGER_QUOTE = {
     "source_url": "https://www.databricks.com/blog/boost-your-data-ai-skills-our-latest-offerings-databricks-academy-labs-and-blended-learning",
 }
 
+ONE_PAGER_RESEARCH_COMPUTE_SIGNALS = {
+    "7nrp",
+    "bare metal",
+    "cluster",
+    "clusters",
+    "compute",
+    "gpu",
+    "gpus",
+    "high-performance",
+    "hpc",
+    "national research platform",
+    "research",
+    "scientific",
+    "workload",
+    "workloads",
+}
+
+ONE_PAGER_LEARNING_DELIVERY_SIGNALS = {
+    "academy",
+    "bootcamp",
+    "course",
+    "courses",
+    "coursera",
+    "enablement",
+    "faculty",
+    "instructor",
+    "learner",
+    "learners",
+    "learning",
+    "lms",
+    "student",
+    "students",
+    "teaching",
+    "training",
+    "workshop",
+    "workshops",
+}
+
 ONE_PAGER_DEFAULT_BUYERS = {
     "AI Gateway": [
         "IT and academic leaders governing AI access",
@@ -1094,6 +1132,66 @@ def _resolved_products(req: GenerateRequest) -> list[str]:
     return [resolved] if resolved else []
 
 
+def _one_pager_request_text(req: GenerateRequest) -> str:
+    return f"{_resolved_product(req)} {_resolved_audience(req)} {req.objective}".lower()
+
+
+def _request_mentions_nrp(req: GenerateRequest) -> bool:
+    lowered = _one_pager_request_text(req)
+    return "national research platform" in lowered or "7nrp" in lowered or bool(re.search(r"\bnrp\b", lowered))
+
+
+def _one_pager_request_modes(req: GenerateRequest) -> dict[str, bool]:
+    lowered = _one_pager_request_text(req)
+    research_compute = _resolved_product(req).lower() == "gpu & cpu compute" or any(
+        signal in lowered for signal in ONE_PAGER_RESEARCH_COMPUTE_SIGNALS
+    )
+    learning_delivery = any(signal in lowered for signal in ONE_PAGER_LEARNING_DELIVERY_SIGNALS)
+    return {
+        "research_compute": research_compute,
+        "learning_delivery": learning_delivery,
+    }
+
+
+def _proof_matches_request_family(req: GenerateRequest, proof: dict) -> bool:
+    tags = {item.lower() for item in proof.get("tags", set())}
+    proof_text = " ".join(
+        [
+            proof.get("organization", ""),
+            proof.get("use_case", ""),
+            proof.get("what_it_proves", ""),
+        ]
+    ).lower()
+    modes = _one_pager_request_modes(req)
+    if modes["research_compute"]:
+        research_match = "research" in tags or any(
+            signal in proof_text for signal in ("research", "compute", "cluster", "bare metal", "scientific", "workload")
+        )
+        if not research_match:
+            return False
+    if modes["learning_delivery"] and not modes["research_compute"]:
+        learning_match = (
+            "teaching and learning" in tags
+            or "enablement" in tags
+            or any(
+                signal in proof_text
+                for signal in (
+                    "bootcamp",
+                    "course",
+                    "faculty",
+                    "learner",
+                    "student",
+                    "teaching",
+                    "training",
+                    "workshop",
+                )
+            )
+        )
+        if not learning_match:
+            return False
+    return True
+
+
 def _one_pager_best_fit_entries(req: GenerateRequest, entries: list[str]) -> list[str]:
     explicit_audience = _resolved_audience(req)
     cleaned = [
@@ -1112,6 +1210,8 @@ def _one_pager_best_fit_entries(req: GenerateRequest, entries: list[str]) -> lis
         seeded = [explicit_audience]
         for item in anchored:
             if item.lower() != explicit_audience.lower():
+                if item.lower().startswith(explicit_audience.lower()):
+                    continue
                 seeded.append(item)
         cleaned = seeded
         unique: list[str] = []
@@ -1176,6 +1276,8 @@ def _proof_priority_for_request(req: GenerateRequest, proof_name: str, base_prio
     proof = _proof_library_entry(proof_name)
     if not proof:
         return score
+    if not _proof_matches_request_family(req, proof):
+        return -1000
     tags = {item.lower() for item in proof.get("tags", set())}
     products = {item.lower() for item in _resolved_products(req)}
     audience = _resolved_audience(req).lower()
@@ -1208,7 +1310,10 @@ def _select_one_pager_proof_cards(req: GenerateRequest, proofs: list[dict[str, s
         logo = _logo_entry(reference)
         if logo:
             card["logo"] = logo
-        ranked.append((_proof_priority_for_request(req, reference, int(proof.get("priority", 0))), card))
+        score = _proof_priority_for_request(req, reference, int(proof.get("priority", 0)))
+        if score < 0:
+            continue
+        ranked.append((score, card))
         used_explicit_proof = True
 
     if not ranked:
@@ -1219,7 +1324,9 @@ def _select_one_pager_proof_cards(req: GenerateRequest, proofs: list[dict[str, s
                 tags = {item.lower() for item in proof.get("tags", set())}
                 if product.lower() not in tags:
                     continue
-                if candidate_name == "National Research Platform" and "national research platform" not in req.objective.lower():
+                if candidate_name == "National Research Platform" and not (
+                    _request_mentions_nrp(req) or _one_pager_request_modes(req)["research_compute"]
+                ):
                     continue
                 card = {
                     "organization": proof["organization"],
@@ -1231,7 +1338,10 @@ def _select_one_pager_proof_cards(req: GenerateRequest, proofs: list[dict[str, s
                 logo = _logo_entry(candidate_name)
                 if logo:
                     card["logo"] = logo
-                ranked.append((_proof_priority_for_request(req, candidate_name, int(proof.get("priority", 0))), card))
+                score = _proof_priority_for_request(req, candidate_name, int(proof.get("priority", 0)))
+                if score < 0:
+                    continue
+                ranked.append((score, card))
 
     ranked.sort(key=lambda item: item[0], reverse=True)
     deduped: list[dict] = []
@@ -1291,11 +1401,18 @@ def _enrich_one_pager_packet(req: GenerateRequest, packet: dict | None) -> dict 
         return None
     best_fit = _one_pager_best_fit_entries(req, list(packet.get("audiences", [])))
     proof_cards = _select_one_pager_proof_cards(req, list(packet.get("proofs", [])))
+    selected_orgs = {card["organization"].lower() for card in proof_cards}
     packet["audiences"] = best_fit
-    packet["proofs"] = [
-        item for item in packet.get("proofs", [])
-        if item.get("reference") and not _proof_is_disallowed_for_one_pager(item["reference"])
-    ]
+    packet["proofs"] = []
+    for item in packet.get("proofs", []):
+        reference = item.get("reference", "").strip()
+        if not reference or _proof_is_disallowed_for_one_pager(reference):
+            continue
+        proof = _proof_library_entry(reference)
+        organization = (proof.get("organization") if proof else reference).strip().lower()
+        if not selected_orgs or organization not in selected_orgs:
+            continue
+        packet["proofs"].append(item)
     packet["audience_eyebrow"] = _one_pager_audience_eyebrow(req, best_fit)
     packet["audience_heading"] = "Best fit"
     packet["problem_heading"] = "Why this matters"
@@ -1511,6 +1628,11 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     status = "strong" if overall >= 4.3 else "usable" if overall >= 3.3 else "needs-work"
     if req.asset_type == "one-pager" and specificity_score <= 2:
         status = "needs-work"
+    if req.asset_type == "one-pager" and one_pager_flags and one_pager_flags["weak_named_proof"]:
+        status = "usable" if overall >= 3.3 else "needs-work"
+    if req.asset_type == "one-pager" and completeness_score < 4 and status == "strong":
+        status = "usable"
+        overall = min(overall, 4.0)
     return {
         "overall_score": overall,
         "status": status,
