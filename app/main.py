@@ -1039,6 +1039,24 @@ def _proof_entry_is_placeholder(entry: str) -> bool:
     return any(pattern.search(entry) for pattern in ONE_PAGER_PLACEHOLDER_PROOF_PATTERNS)
 
 
+WEAK_ONE_PAGER_CTA_PATTERNS = (
+    re.compile(r"^\s*learn\s+how\b", re.IGNORECASE),
+    re.compile(r"^\s*learn\s+more\b", re.IGNORECASE),
+    re.compile(r"^\s*discover\b", re.IGNORECASE),
+)
+
+
+def _one_pager_cta_strength(cta_text: str) -> int:
+    cta = cta_text.strip()
+    if not cta or cta.lower() == "not available":
+        return 2
+    if any(pattern.search(cta) for pattern in WEAK_ONE_PAGER_CTA_PATTERNS):
+        return 3
+    if re.search(r"\b(schedule|demo|review|discuss|evaluate|explore|contact|map|pilot|plan)\b", cta, re.IGNORECASE):
+        return 5
+    return 4
+
+
 def _looks_like_product_coined_audience(req: GenerateRequest, entry: str) -> bool:
     lowered_entry = entry.lower()
     if lowered_entry in req.objective.lower():
@@ -1096,6 +1114,15 @@ def _one_pager_best_fit_entries(req: GenerateRequest, entries: list[str]) -> lis
             if item.lower() != explicit_audience.lower():
                 seeded.append(item)
         cleaned = seeded
+        unique: list[str] = []
+        seen: set[str] = set()
+        for item in cleaned:
+            normalized = item.lower()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            unique.append(item)
+        return unique[:3]
 
     if len(cleaned) < 2:
         for product in _resolved_products(req):
@@ -1231,14 +1258,20 @@ def _one_pager_logo_strip(req: GenerateRequest, proof_cards: list[dict]) -> list
             continue
         seen.add(logo["name"].lower())
         logos.append(logo)
-    for logo in DEFAULT_ONE_PAGER_LOGO_STRIP:
-        if logo["name"].lower() in seen:
-            continue
-        seen.add(logo["name"].lower())
-        logos.append(logo)
-        if len(logos) >= 4:
-            break
     return logos[:4]
+
+
+def _one_pager_footer_quote(req: GenerateRequest, proof_cards: list[dict]) -> dict | None:
+    lowered = f"{req.objective} {_resolved_audience(req)} {_resolved_product(req)}".lower()
+    learning_signals = {
+        "academy", "bootcamp", "course", "courses", "coursera", "enablement",
+        "instructor", "learning", "lms", "students", "teaching", "training", "workshop",
+    }
+    if any(signal in lowered for signal in learning_signals):
+        return DEFAULT_ONE_PAGER_QUOTE
+    if any((card.get("organization") or "").lower() in {"databricks", "databricks academy"} for card in proof_cards):
+        return DEFAULT_ONE_PAGER_QUOTE
+    return None
 
 
 def _one_pager_credibility_bar(req: GenerateRequest, proof_cards: list[dict]) -> list[str]:
@@ -1272,7 +1305,7 @@ def _enrich_one_pager_packet(req: GenerateRequest, packet: dict | None) -> dict 
     packet["proof_cards"] = proof_cards
     packet["logo_strip"] = _one_pager_logo_strip(req, proof_cards)
     packet["credibility_bar"] = _one_pager_credibility_bar(req, proof_cards)
-    packet["footer_quote"] = DEFAULT_ONE_PAGER_QUOTE
+    packet["footer_quote"] = _one_pager_footer_quote(req, proof_cards)
     packet["render_version"] = "2026-04-30-v3"
     packet["raw_quote"] = packet.get("quote", "")
     packet["quote"] = ""
@@ -1431,7 +1464,7 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     elif req.asset_type == "one-pager":
         cta_match = re.search(r"(?ms)^CTA:\s*(.+)$", output)
         cta_text = cta_match.group(1).strip() if cta_match else ""
-        actionability_score = 5 if cta_text and cta_text.lower() != "not available" else 2
+        actionability_score = _one_pager_cta_strength(cta_text)
     else:
         has_next_step = any(term in output.lower() for term in ("meeting", "follow-up", "calendar", "demo", "let me know", "suggest an alternative"))
         if _detect_schedule_ask(req.objective):
@@ -1470,7 +1503,14 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     scores.append({"id": "completeness", "label": "Completeness", "score": completeness_score})
 
     overall = round(sum(item["score"] for item in scores) / len(scores), 1)
+    if req.asset_type == "one-pager" and specificity_score <= 2:
+        blockers.append("One-pager is not specific enough to the named buyer or workflow.")
+        overall = min(overall, 3.0)
+    if req.asset_type == "one-pager" and one_pager_flags and one_pager_flags["weak_named_proof"] and specificity_score <= 3:
+        overall = min(overall, 2.8)
     status = "strong" if overall >= 4.3 else "usable" if overall >= 3.3 else "needs-work"
+    if req.asset_type == "one-pager" and specificity_score <= 2:
+        status = "needs-work"
     return {
         "overall_score": overall,
         "status": status,

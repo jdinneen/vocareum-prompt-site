@@ -9,6 +9,7 @@ from app.main import (
     _max_output_tokens,
     _one_pager_missing_sections,
     _auto_quality_report,
+    _enrich_one_pager_packet,
     _post_process,
     _sanitize_proof_sections,
     _sanitize_one_pager_output,
@@ -721,6 +722,65 @@ def test_generate_one_pager_returns_canonical_content_packet(monkeypatch):
     assert payload["content_packet"]["audiences"][0] == "Coursera"
     assert payload["content_packet"]["proofs"] == []
     assert payload["content_packet"]["footer_quote"]["attribution"] == "Rochana Golani"
+
+
+def test_one_pager_enrichment_keeps_named_audience_without_default_backfill():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="GPU & CPU Compute",
+        audience="7NRP",
+        objective="Build a one-pager for GPU & CPU Compute for 7NRP focused on advanced AI research.",
+    )
+    packet = _enrich_one_pager_packet(
+        req,
+        {
+            "audiences": ["7NRP"],
+            "proofs": [{"reference": "Iowa State", "signal": "advanced AI training"}],
+            "headline": "Headline",
+            "subhead": "Subhead",
+            "problem": "Problem",
+            "steps": ["Step one", "Step two", "Step three"],
+            "cta": "Review fit for governed research compute.",
+        },
+    )
+
+    assert packet["audiences"] == ["7NRP"]
+    assert packet["logo_strip"] == []
+    assert packet["footer_quote"] is None
+
+
+def test_one_pager_quality_with_low_specificity_and_weak_proof_is_needs_work():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="GPU & CPU Compute",
+        audience="7NRP",
+        objective="Build a one-pager for GPU & CPU Compute for 7NRP focused on advanced AI research and scientific simulation workloads.",
+    )
+    output = (
+        "Audience: For 7NRP\n"
+        "Headline: Scale dedicated compute for advanced AI research and scientific simulation workloads\n"
+        "Subhead: For 7NRP, Vocareum provides dedicated GPUs, high-performance clusters, and bare metal options to scale computing power on demand. This supports advanced AI training, deep learning, and scientific simulation with governed usage and budget controls.\n"
+        "Stat Bar: 7,000+ - institutions and organizations | 1M+ - annual unique learners | 5M+ - total platform learners\n"
+        "Problem: Advanced AI research and scientific simulation workloads often exceed the capabilities of standard computing environments. Researchers require dedicated, scalable compute resources with robust governance and budget controls to execute intensive tasks effectively.\n"
+        "How It Works: Access dedicated GPUs | Utilize high-performance clusters | Deploy bare metal environments\n"
+        "Who Uses This: 7NRP\n"
+        "Proof: Iowa State - advanced AI training | National Research Platform - research computing infrastructure\n"
+        "CTA: Learn how to scale your research computing capabilities."
+    )
+    report = _auto_quality_report(
+        req,
+        output,
+        "GPU & CPU Compute supports dedicated GPUs, high-performance clusters, and bare metal environments. National Research Platform is approved proof. Iowa State is approved proof.",
+        {
+            "approved_numeric_claims": ["7,000+", "1M+", "5M+"],
+            "default_public_stats": ["7,000+ institutions and organizations", "1M+ annual unique learners", "5M+ total platform learners"],
+            "approved_named_proof": ["Iowa State", "National Research Platform"],
+        },
+    )
+
+    assert report["status"] == "needs-work"
+    assert report["overall_score"] <= 3.0
+    assert any("not specific enough" in item.lower() for item in report["blockers"])
 
 
 def test_workflow_output_budgets_match_current_contract():
