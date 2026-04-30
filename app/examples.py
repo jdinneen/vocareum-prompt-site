@@ -207,6 +207,7 @@ EXAMPLE_PATTERNS = [
             "Lead with one named audience and one clear outcome.",
             "Use 1 to 3 credible buyer roles only when the brief or grounding supports them.",
             "Keep proof disciplined: one approved named proof when available, otherwise `Proof: None`.",
+            "Make proof explain itself to a cold reader instead of listing a name without context.",
             "Close with a single next step.",
         ],
         "claims_to_keep": [
@@ -219,7 +220,7 @@ EXAMPLE_PATTERNS = [
             "Do not broaden one named audience into generic sectors.",
             "Do not use placeholder proof, source metadata, or process language as public proof.",
         ],
-        "source": "Reference Collateral: Learning Flow Method One-Pager + Vocareum Overview Q1 2026",
+        "source": "Current one-pager operating standard",
     },
     {
         "id": "product-overview",

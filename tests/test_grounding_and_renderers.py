@@ -341,7 +341,7 @@ def test_one_pager_prompt_prefers_none_over_placeholder_proof(monkeypatch):
     prompt = _build_user_prompt(req)
 
     assert "If no approved named public proof exists, write 'None'." in prompt
-    assert "Do not use source metadata, review dates, catalog names, or workflow/category placeholders as proof." in prompt
+    assert "Do not use source metadata, review dates, catalog names, workflow/category placeholders, or NAIRR references as proof." in prompt
 
 
 def test_resolve_example_uses_reference_one_pager_for_general_one_pager():
@@ -718,8 +718,9 @@ def test_generate_one_pager_returns_canonical_content_packet(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["content_packet"]["headline"] == "Deliver AI-Generated Scenario Practice for Coursera Learners"
-    assert payload["content_packet"]["audiences"] == ["Coursera"]
+    assert payload["content_packet"]["audiences"][0] == "Coursera"
     assert payload["content_packet"]["proofs"] == []
+    assert payload["content_packet"]["footer_quote"]["attribution"] == "Rochana Golani"
 
 
 def test_workflow_output_budgets_match_current_contract():
@@ -812,6 +813,40 @@ def test_validation_allows_supported_proof_name_with_reference_suffix():
     )
 
     assert result.ok
+
+
+def test_validation_rejects_objective_account_name_as_proof():
+    result = validate_output(
+        asset_type="one-pager",
+        text="Proof: Deloitte shows this can work for enterprise learning teams.",
+        support_text="Simulations provides AI-generated environments for roleplay and workflow rehearsal.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": ["University of Michigan"],
+            "allowed_reference_names": ["Vocareum", "Simulations"],
+        },
+        objective_text="Build a one-pager for Simulations for Deloitte.",
+    )
+
+    assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
+
+
+def test_validation_rejects_nairr_even_if_support_mentions_it():
+    result = validate_output(
+        asset_type="one-pager",
+        text="Proof: NAIRR Classroom shows foundational AI education.",
+        support_text="NAIRR Classroom appears in old support text but should not be used as named proof.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": ["University of Michigan", "NAIRR Classroom"],
+            "allowed_reference_names": ["Vocareum", "AI Notebook"],
+        },
+        objective_text="Build a one-pager for AI Notebook.",
+    )
+
+    assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
 
 
 def test_numeric_phrase_extraction_stops_at_sentence_boundary():

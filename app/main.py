@@ -21,6 +21,180 @@ if not logging.getLogger().handlers:
     logging.basicConfig(level=logging.INFO)
 
 
+DISALLOWED_ONE_PAGER_PROOF_PATTERNS = (
+    re.compile(r"\bnairr\b", re.IGNORECASE),
+)
+
+HIGH_SIGNAL_ONE_PAGER_PROOFS = {
+    "University of Michigan",
+    "UC San Diego / GPS",
+    "GPS UC San Diego",
+    "AWS Academy",
+    "Databricks Academy",
+    "Databricks",
+}
+
+ONE_PAGER_LOGO_LIBRARY = {
+    "University of Michigan": {
+        "name": "University of Michigan",
+        "kind": "customer",
+        "url": "https://www.vocareum.com/wp-content/uploads/2026/03/University-of-Michigan.png",
+    },
+    "UC San Diego / GPS": {
+        "name": "UC San Diego",
+        "kind": "customer",
+        "url": "https://www.vocareum.com/wp-content/uploads/2026/03/University_of_California_San_Diego_logo.svg",
+    },
+    "GPS UC San Diego": {
+        "name": "UC San Diego",
+        "kind": "customer",
+        "url": "https://www.vocareum.com/wp-content/uploads/2026/03/University_of_California_San_Diego_logo.svg",
+    },
+    "AWS Academy": {
+        "name": "AWS",
+        "kind": "partner",
+        "url": "https://www.vocareum.com/wp-content/uploads/2026/03/Amazon_Web_Services_Logo.svg",
+    },
+    "Databricks Academy": {
+        "name": "Databricks",
+        "kind": "partner",
+        "url": "https://www.vocareum.com/wp-content/uploads/2026/03/databricks-logo.webp",
+    },
+    "Databricks": {
+        "name": "Databricks",
+        "kind": "partner",
+        "url": "https://www.vocareum.com/wp-content/uploads/2026/03/databricks-logo.webp",
+    },
+}
+
+ONE_PAGER_PROOF_LIBRARY = {
+    "University of Michigan": {
+        "organization": "University of Michigan",
+        "use_case": "Expanded AI Gateway and AI Notebook campus-wide for secure generative AI access and scaled lab delivery.",
+        "what_it_proves": "Vocareum can deliver governed AI access and hands-on infrastructure at major-university scale.",
+        "source_url": "https://www.vocareum.com/university-of-michigan-partnership/",
+        "priority": 100,
+        "tags": {"ai gateway", "ai notebook", "gpu & cpu compute", "higher education", "governed ai"},
+    },
+    "UC San Diego / GPS": {
+        "organization": "UC San Diego",
+        "use_case": "AI Compass supported math-prep instruction with 80k+ graded responses, 16.9k tutor questions, and failure-rate movement from 35.6% to 11.4% vs prior cohort.",
+        "what_it_proves": "Vocareum can improve learner support and faculty visibility inside a live academic workflow, not just a lab sandbox.",
+        "source_url": "https://www.vocareum.com/gps-ucsd/",
+        "priority": 95,
+        "tags": {"ai compass", "simulations", "higher education", "teaching and learning"},
+    },
+    "GPS UC San Diego": {
+        "organization": "UC San Diego",
+        "use_case": "AI Compass supported math-prep instruction with 80k+ graded responses, 16.9k tutor questions, and failure-rate movement from 35.6% to 11.4% vs prior cohort.",
+        "what_it_proves": "Vocareum can improve learner support and faculty visibility inside a live academic workflow, not just a lab sandbox.",
+        "source_url": "https://www.vocareum.com/gps-ucsd/",
+        "priority": 95,
+        "tags": {"ai compass", "simulations", "higher education", "teaching and learning"},
+    },
+    "AWS Academy": {
+        "organization": "AWS Academy",
+        "use_case": "Hands-on cloud learning with scalable lab delivery for a very large learner base.",
+        "what_it_proves": "Vocareum is trusted to power governed, production-grade cloud learning at scale.",
+        "source_url": "https://www.vocareum.com/aws-academy/",
+        "priority": 86,
+        "tags": {"cloud labs", "on-the-fly labs", "aws", "higher education", "enterprise"},
+    },
+    "Databricks Academy": {
+        "organization": "Databricks Academy",
+        "use_case": "Standardized hands-on learning across asynchronous, instructor-led, and bootcamp delivery models.",
+        "what_it_proves": "Vocareum fits partner-led enablement programs that need governed, repeatable lab delivery.",
+        "source_url": "https://www.databricks.com/blog/boost-your-data-ai-skills-our-latest-offerings-databricks-academy-labs-and-blended-learning",
+        "priority": 84,
+        "tags": {"databases", "ai notebook", "enterprise", "enablement", "bootcamps"},
+    },
+    "Databricks": {
+        "organization": "Databricks",
+        "use_case": "Standardized hands-on learning across asynchronous, instructor-led, and bootcamp delivery models.",
+        "what_it_proves": "Vocareum fits partner-led enablement programs that need governed, repeatable lab delivery.",
+        "source_url": "https://www.databricks.com/blog/boost-your-data-ai-skills-our-latest-offerings-databricks-academy-labs-and-blended-learning",
+        "priority": 84,
+        "tags": {"databases", "ai notebook", "enterprise", "enablement", "bootcamps"},
+    },
+    "Georgia Tech": {
+        "organization": "Georgia Tech",
+        "use_case": "AI and data courses using notebook-based assignments, LMS integration, and GPU access.",
+        "what_it_proves": "Vocareum can support large-scale, faculty-led AI course delivery with real environments and assessment.",
+        "source_url": "https://www.vocareum.com/georgia-tech-case-study/",
+        "priority": 70,
+        "tags": {"ai notebook", "gpu & cpu compute", "higher education"},
+    },
+    "Iowa State": {
+        "organization": "Iowa State University",
+        "use_case": "AI Notebook for MLOps and generative AI micro-credentials with secure auto-grading.",
+        "what_it_proves": "Vocareum can support advanced AI course delivery in governed notebook environments.",
+        "source_url": "https://www.vocareum.com/iowa-state-university/",
+        "priority": 38,
+        "tags": {"ai notebook", "higher education"},
+    },
+    "National Research Platform": {
+        "organization": "National Research Platform",
+        "use_case": "Governed research-computing delivery for university partners evaluating shared AI infrastructure.",
+        "what_it_proves": "Vocareum can participate in multi-institution compute programs when governed access is the core requirement.",
+        "source_url": "https://www.vocareum.com/nrp/",
+        "priority": 28,
+        "tags": {"gpu & cpu compute", "ai gateway", "research"},
+    },
+}
+
+DEFAULT_ONE_PAGER_LOGO_STRIP = [
+    ONE_PAGER_LOGO_LIBRARY["University of Michigan"],
+    ONE_PAGER_LOGO_LIBRARY["UC San Diego / GPS"],
+    ONE_PAGER_LOGO_LIBRARY["AWS Academy"],
+    ONE_PAGER_LOGO_LIBRARY["Databricks"],
+]
+
+DEFAULT_ONE_PAGER_QUOTE = {
+    "text": "We've standardized on Vocareum's education technology platform for our asynchronous, instructor-led and bootcamp courses.",
+    "attribution": "Rochana Golani",
+    "title": "GVP, Learning & Enablement, Databricks",
+    "source_url": "https://www.databricks.com/blog/boost-your-data-ai-skills-our-latest-offerings-databricks-academy-labs-and-blended-learning",
+}
+
+ONE_PAGER_DEFAULT_BUYERS = {
+    "AI Gateway": [
+        "IT and academic leaders governing AI access",
+        "Teaching and learning teams embedding AI into courses",
+        "Program owners managing policy, spend, and usage visibility",
+    ],
+    "GPU & CPU Compute": [
+        "Research-computing leaders scaling advanced workloads",
+        "Faculty and lab teams that need controlled GPU access",
+        "Program owners balancing access, budgets, and uptime",
+    ],
+    "AI Notebook": [
+        "Course teams delivering applied AI and data labs",
+        "Faculty building notebook-based assignments",
+        "Program owners standardizing governed notebook environments",
+    ],
+    "AI Compass": [
+        "Teaching teams improving learner readiness before core coursework",
+        "Academic leaders closing skills gaps with live AI support",
+        "Program owners that need faculty-facing learning visibility",
+    ],
+    "Simulations": [
+        "Learning product teams building scenario-based practice",
+        "Program owners rehearsing judgment and workflow readiness",
+        "Training teams that need safe practice before live systems",
+    ],
+    "Cloud Labs": [
+        "Training and enablement teams running hands-on cloud learning",
+        "Platform teams that need predictable, governed lab delivery",
+        "Program owners scaling workshops without environment drift",
+    ],
+    "On-the-Fly Labs": [
+        "Solutions and enablement teams building labs quickly",
+        "Workshop owners who need governed live environments fast",
+        "Program teams that want reusable hands-on lab delivery",
+    ],
+}
+
+
 class GenerateRequest(BaseModel):
     asset_type: Literal["grounded-answer", "outbound-email", "reply-email", "sales-collateral", "one-pager", "sales-deck-brief"] = Field(default="outbound-email")
     audience: str = Field(default="", max_length=200)
@@ -147,20 +321,20 @@ def _output_format_instructions(req: GenerateRequest) -> str:
         return (
             "Return a structured one-pager with ALL of these labeled sections in this exact order. "
             "Every section is REQUIRED — do not omit any.\n\n"
+            "Audience: one short audience eyebrow beginning with 'For ...'\n"
             "Headline: one strong value-proposition line\n"
             "Subhead: 1-2 sentences expanding the headline\n"
             "Stat Bar: 3-4 entries separated by | in the format 'value - label' (e.g. '2M+ - AWS learners')\n"
             "Problem: 2-3 sentences on the pain point this solves\n"
             "How It Works: 3 short actions separated by |\n"
-            "Who Uses This: 1-3 audience entries separated by |\n"
-            "Proof: 1-3 approved named public proof entries separated by | in the format 'reference - signal'. If no approved named public proof exists, write 'None'.\n"
-            "Quote: one approved public quote, or 'None'\n"
+            "Who Uses This: 1-3 specific buyer or operator entries separated by |. Do not use generic labels like learners, researchers, business teams, or technical teams.\n"
+            "Proof: 1-2 approved named public proof entries separated by | in the format 'reference - what it proves'. If no approved named public proof exists, write 'None'.\n"
             "CTA: one clear next-step sentence\n\n"
             "Put each section label at the start of its own line followed by the content. "
             "Keep copy concise and scan-friendly. Use only grounded proof. "
             "If the brief names a company, institution, or partner, keep that audience explicit in the Subhead and Who Uses This sections instead of broadening it into generic sectors. "
             "When a named audience is provided, make the first Who Uses This entry begin with that exact audience name. "
-            "Do not use source metadata, review dates, catalog names, or workflow/category placeholders as proof."
+            "Do not use source metadata, review dates, catalog names, workflow/category placeholders, or NAIRR references as proof."
         )
     if req.asset_type == "sales-deck-brief":
         return (
@@ -556,7 +730,7 @@ def _normalize_approved_stats(text: str) -> str:
 
 
 def _replace_labeled_section(text: str, label: str, new_body: str) -> str:
-    labels = ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"]
+    labels = ["Audience", "Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"]
     label_clause = "|".join(re.escape(item) for item in labels)
     pattern = re.compile(
         rf"(?ms)^({re.escape(label)}:?\s*)(.*?)(?=^(?:{label_clause}):?\s*|\Z)"
@@ -583,13 +757,14 @@ def _split_packet_dash_entries(value: str) -> list[dict[str, str]]:
 def _build_one_pager_packet(text: str) -> dict | None:
     sections = _extract_labeled_sections(
         text,
-        ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+        ["Audience", "Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
     )
     required = ["Headline", "Subhead", "Problem", "How It Works", "Who Uses This", "Proof", "CTA"]
     if any(not sections.get(label) for label in required):
         return None
 
     return {
+        "audience": sections.get("Audience", ""),
         "headline": sections.get("Headline", ""),
         "subhead": sections.get("Subhead", ""),
         "stats": _split_packet_dash_entries(sections.get("Stat Bar", ""))[:4],
@@ -609,7 +784,7 @@ def _build_one_pager_packet(text: str) -> dict | None:
 def _sanitize_one_pager_output(req: GenerateRequest, text: str) -> str:
     sections = _extract_labeled_sections(
         text,
-        ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+        ["Audience", "Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
     )
     if not sections:
         return text
@@ -636,7 +811,7 @@ def _sanitize_one_pager_output(req: GenerateRequest, text: str) -> str:
 
     proof_entries = [
         item for item in _section_items(sections.get("Proof", ""))
-        if not _none_like(item) and not _proof_entry_is_placeholder(item)
+        if not _none_like(item) and not _proof_entry_is_placeholder(item) and not _proof_is_disallowed_for_one_pager(item)
     ]
     updated = _replace_labeled_section(updated, "Proof", " | ".join(proof_entries[:3]) if proof_entries else "None")
 
@@ -886,18 +1061,246 @@ def _looks_like_product_coined_audience(req: GenerateRequest, entry: str) -> boo
     return bool(product_overlap and role_overlap) or hyphenated
 
 
+def _proof_is_disallowed_for_one_pager(value: str) -> bool:
+    normalized = value.strip()
+    if not normalized:
+        return False
+    return any(pattern.search(normalized) for pattern in DISALLOWED_ONE_PAGER_PROOF_PATTERNS)
+
+
+def _resolved_products(req: GenerateRequest) -> list[str]:
+    products = matched_products(f"{req.product} {req.objective}")
+    if products:
+        return products
+    resolved = _resolved_product(req)
+    return [resolved] if resolved else []
+
+
+def _one_pager_best_fit_entries(req: GenerateRequest, entries: list[str]) -> list[str]:
+    explicit_audience = _resolved_audience(req)
+    cleaned = [
+        item.strip()
+        for item in entries
+        if item.strip()
+        and not _none_like(item)
+        and not _looks_like_product_coined_audience(req, item)
+    ]
+    if explicit_audience:
+        target_tokens = _meaningful_phrase_tokens(explicit_audience)
+        anchored = [
+            item for item in cleaned
+            if explicit_audience.lower() in item.lower() or (_meaningful_phrase_tokens(item) & target_tokens)
+        ]
+        seeded = [explicit_audience]
+        for item in anchored:
+            if item.lower() != explicit_audience.lower():
+                seeded.append(item)
+        cleaned = seeded
+
+    if len(cleaned) < 2:
+        for product in _resolved_products(req):
+            for item in ONE_PAGER_DEFAULT_BUYERS.get(product, []):
+                if item not in cleaned:
+                    cleaned.append(item)
+                if len(cleaned) >= 3:
+                    break
+            if len(cleaned) >= 3:
+                break
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for item in cleaned:
+        normalized = item.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique.append(item)
+    return unique[:3]
+
+
+def _one_pager_audience_eyebrow(req: GenerateRequest, best_fit: list[str]) -> str:
+    explicit_audience = _resolved_audience(req)
+    if explicit_audience:
+        return f"For {explicit_audience}"
+    if best_fit:
+        return f"For {best_fit[0]}"
+    products = _resolved_products(req)
+    if products:
+        return f"For teams evaluating {products[0]}"
+    return "For teams evaluating Vocareum"
+
+
+def _proof_library_entry(name: str) -> dict | None:
+    for key, value in ONE_PAGER_PROOF_LIBRARY.items():
+        if key.lower() == name.lower():
+            return value
+    return None
+
+
+def _logo_entry(name: str) -> dict | None:
+    for key, value in ONE_PAGER_LOGO_LIBRARY.items():
+        if key.lower() == name.lower():
+            return value
+    return None
+
+
+def _proof_priority_for_request(req: GenerateRequest, proof_name: str, base_priority: int) -> int:
+    score = base_priority
+    proof = _proof_library_entry(proof_name)
+    if not proof:
+        return score
+    tags = {item.lower() for item in proof.get("tags", set())}
+    products = {item.lower() for item in _resolved_products(req)}
+    audience = _resolved_audience(req).lower()
+    objective = req.objective.lower()
+    if tags & products:
+        score += 18
+    if any(tag in objective for tag in tags):
+        score += 6
+    if audience and any(token in audience for token in ("provost", "faculty", "teaching", "learning", "university", "academic")) and "higher education" in tags:
+        score += 5
+    return score
+
+
+def _select_one_pager_proof_cards(req: GenerateRequest, proofs: list[dict[str, str]]) -> list[dict]:
+    ranked: list[tuple[int, dict]] = []
+    used_explicit_proof = False
+    for item in proofs:
+        reference = item.get("reference", "").strip()
+        if not reference or _proof_is_disallowed_for_one_pager(reference):
+            continue
+        proof = _proof_library_entry(reference)
+        if not proof:
+            continue
+        card = {
+            "organization": proof["organization"],
+            "use_case": proof["use_case"],
+            "what_it_proves": proof["what_it_proves"],
+            "source_url": proof["source_url"],
+        }
+        logo = _logo_entry(reference)
+        if logo:
+            card["logo"] = logo
+        ranked.append((_proof_priority_for_request(req, reference, int(proof.get("priority", 0))), card))
+        used_explicit_proof = True
+
+    if not ranked:
+        for product in _resolved_products(req):
+            for candidate_name, proof in ONE_PAGER_PROOF_LIBRARY.items():
+                if _proof_is_disallowed_for_one_pager(candidate_name):
+                    continue
+                tags = {item.lower() for item in proof.get("tags", set())}
+                if product.lower() not in tags:
+                    continue
+                if candidate_name == "National Research Platform" and "national research platform" not in req.objective.lower():
+                    continue
+                card = {
+                    "organization": proof["organization"],
+                    "use_case": proof["use_case"],
+                    "what_it_proves": proof["what_it_proves"],
+                    "source_url": proof["source_url"],
+                    "relation": "Related proof",
+                }
+                logo = _logo_entry(candidate_name)
+                if logo:
+                    card["logo"] = logo
+                ranked.append((_proof_priority_for_request(req, candidate_name, int(proof.get("priority", 0))), card))
+
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    deduped: list[dict] = []
+    seen: set[str] = set()
+    for _score, card in ranked:
+        key = card["organization"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(card)
+        if len(deduped) >= 2:
+            break
+    return deduped
+
+
+def _one_pager_logo_strip(req: GenerateRequest, proof_cards: list[dict]) -> list[dict]:
+    logos: list[dict] = []
+    seen: set[str] = set()
+    for card in proof_cards:
+        logo = card.get("logo")
+        if not logo:
+            continue
+        if logo["name"].lower() in seen:
+            continue
+        seen.add(logo["name"].lower())
+        logos.append(logo)
+    for logo in DEFAULT_ONE_PAGER_LOGO_STRIP:
+        if logo["name"].lower() in seen:
+            continue
+        seen.add(logo["name"].lower())
+        logos.append(logo)
+        if len(logos) >= 4:
+            break
+    return logos[:4]
+
+
+def _one_pager_credibility_bar(req: GenerateRequest, proof_cards: list[dict]) -> list[str]:
+    items = [
+        "5M+ total platform learners",
+        "7,000+ institutions and organizations",
+        "SOC 2 Type II, FERPA, GDPR",
+        "AWS, Azure, GCP, Databricks",
+    ]
+    if proof_cards:
+        items[0] = "Selected customer and partner proof"
+    return items
+
+
+def _enrich_one_pager_packet(req: GenerateRequest, packet: dict | None) -> dict | None:
+    if not packet:
+        return None
+    best_fit = _one_pager_best_fit_entries(req, list(packet.get("audiences", [])))
+    proof_cards = _select_one_pager_proof_cards(req, list(packet.get("proofs", [])))
+    packet["audiences"] = best_fit
+    packet["proofs"] = [
+        item for item in packet.get("proofs", [])
+        if item.get("reference") and not _proof_is_disallowed_for_one_pager(item["reference"])
+    ]
+    packet["audience_eyebrow"] = _one_pager_audience_eyebrow(req, best_fit)
+    packet["audience_heading"] = "Best fit"
+    packet["problem_heading"] = "Why this matters"
+    packet["steps_heading"] = "How Vocareum helps"
+    packet["proof_heading"] = "Related proof in market" if proof_cards and not packet["proofs"] else "Why believe this"
+    packet["cta_label"] = "Next business step"
+    packet["proof_cards"] = proof_cards
+    packet["logo_strip"] = _one_pager_logo_strip(req, proof_cards)
+    packet["credibility_bar"] = _one_pager_credibility_bar(req, proof_cards)
+    packet["footer_quote"] = DEFAULT_ONE_PAGER_QUOTE
+    packet["render_version"] = "2026-04-30-v3"
+    packet["raw_quote"] = packet.get("quote", "")
+    packet["quote"] = ""
+    return packet
+
+
 def _one_pager_quality_flags(req: GenerateRequest, output: str) -> dict:
     sections = _extract_labeled_sections(
         output,
-        ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+        ["Audience", "Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
     )
     proof_entries = [item for item in _section_items(sections.get("Proof", "")) if not _none_like(item)]
     placeholder_proof = any(_proof_entry_is_placeholder(item) for item in proof_entries)
     has_named_proof = bool(proof_entries) and not placeholder_proof
+    banned_proof = any(_proof_is_disallowed_for_one_pager(item) for item in proof_entries)
+    weak_named_proof = bool(proof_entries) and all(
+        not any(reference.lower() in item.lower() for reference in HIGH_SIGNAL_ONE_PAGER_PROOFS)
+        for item in proof_entries
+    )
 
     named_audience = _resolved_audience(req)
     audience_entries = [item for item in _section_items(sections.get("Who Uses This", "")) if not _none_like(item)]
     audience_drift = False
+    generic_audience = any(
+        _meaningful_phrase_tokens(item) <= {"learners", "researchers", "technical"}
+        or item.lower() in {"learners", "researchers", "technical teams", "business teams", "healthcare teams"}
+        for item in audience_entries
+    )
     if named_audience and audience_entries:
         target_tokens = _meaningful_phrase_tokens(named_audience)
         if target_tokens:
@@ -912,6 +1315,9 @@ def _one_pager_quality_flags(req: GenerateRequest, output: str) -> dict:
         "has_named_proof": has_named_proof,
         "placeholder_proof": placeholder_proof,
         "audience_drift": audience_drift,
+        "generic_audience": generic_audience,
+        "banned_proof": banned_proof,
+        "weak_named_proof": weak_named_proof,
     }
 
 
@@ -941,6 +1347,11 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
         scores[-1]["score"] = grounding_score
         blockers.append("One-pager uses placeholder proof instead of approved named public proof.")
         improvements.append("Replace placeholder proof with approved named proof, or use `Proof: None`.")
+    if one_pager_flags and one_pager_flags["banned_proof"]:
+        grounding_score = 1
+        scores[-1]["score"] = grounding_score
+        blockers.append("One-pager uses a banned proof source.")
+        improvements.append("Remove banned proof sources such as NAIRR from the one-pager.")
 
     if req.asset_type == "grounded-answer":
         specificity_score, _signals = _specificity_score(req, output)
@@ -975,6 +1386,8 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
         if one_pager_flags and one_pager_flags["placeholder_proof"]:
             workflow_score = min(workflow_score, 3)
             strengths = [item for item in strengths if item != "One-pager structure is complete."]
+        if one_pager_flags and one_pager_flags["generic_audience"]:
+            workflow_score = min(workflow_score, 3)
     elif req.asset_type == "sales-deck-brief":
         slide_count = len(re.findall(r"(?m)^Slide\s+\d+:", output))
         workflow_score = 5 if slide_count == 6 else max(1, min(5, slide_count))
@@ -1000,12 +1413,16 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     specificity_score, _signals = _specificity_score(req, output)
     if one_pager_flags and one_pager_flags["audience_drift"]:
         specificity_score = max(1, specificity_score - 2)
+    if one_pager_flags and one_pager_flags["generic_audience"]:
+        specificity_score = max(1, specificity_score - 2)
     if specificity_score >= 4:
         strengths.append("Output is specific to the requested product or audience.")
     else:
         improvements.append("Make the output more specific to the named person, audience, or product.")
     if one_pager_flags and one_pager_flags["audience_drift"]:
         improvements.append("Keep `Who Uses This` anchored to the named audience instead of broadening into generic sectors.")
+    if one_pager_flags and one_pager_flags["generic_audience"]:
+        improvements.append("Replace generic audience labels with specific buyers or operators who would actually use this asset.")
     scores.append({"id": "specificity", "label": "Specificity", "score": specificity_score})
 
     actionability_score = 3
@@ -1032,9 +1449,14 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
         completeness_score = 5
         if one_pager_flags and one_pager_flags["placeholder_proof"]:
             completeness_score = 2
+        elif one_pager_flags and one_pager_flags["banned_proof"]:
+            completeness_score = 1
         elif one_pager_flags and not one_pager_flags["has_named_proof"]:
             completeness_score = 2
             improvements.append("Use approved named public proof when available. If none exists, explicitly mark `Proof: None`.")
+        elif one_pager_flags and one_pager_flags["weak_named_proof"]:
+            completeness_score = min(completeness_score, 3)
+            improvements.append("Use proof that is understandable to a cold reader, or rely on scale/compliance credibility instead of weak named proof.")
     elif req.asset_type == "reply-email":
         asks = 1
         if _detect_schedule_ask(req.objective):
@@ -1061,7 +1483,7 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
 
 def _one_pager_missing_sections(text: str) -> list[str]:
     required = ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "CTA"]
-    sections = _extract_labeled_sections(text, required)
+    sections = _extract_labeled_sections(text, ["Audience", *required])
     return [label for label in required if not sections.get(label)]
 
 
@@ -1083,9 +1505,13 @@ def _critic_review_and_select(
         critic_notes.append(f"Keep `{audience}` explicit as the named audience.")
     if product:
         critic_notes.append(f"Keep `{product}` explicit as the named product surface.")
+    critic_notes.append("Rewrite for a cold reader who knows nothing about Vocareum. The draft should answer what this is, who it is for, why to believe it, and what to do next.")
     critic_notes.append("If there is no approved named public proof, write `Proof: None` instead of using source metadata or placeholders.")
+    critic_notes.append("Never use NAIRR references in the one-pager.")
     critic_notes.append("Do not invent extra sectors, departments, or buyer groups when the brief only names one audience.")
     critic_notes.append("Do not coin buyer labels from product names, internal jargon, or hyphenated product-role mashups.")
+    critic_notes.append("Do not use generic audience labels like learners, researchers, business teams, or technical teams.")
+    critic_notes.append("If you use named proof, make the signal understandable to a cold reader.")
     missing_sections = _one_pager_missing_sections(current_text)
     if missing_sections:
         critic_notes.append("Fill every missing or empty labeled section: " + ", ".join(missing_sections) + ".")
@@ -1095,21 +1521,12 @@ def _critic_review_and_select(
         critic_notes.append(item)
     if not critic_notes:
         critic_notes.append("Tighten clarity, specificity, and buyer fit without changing grounded facts.")
-    one_pager_flags = _one_pager_quality_flags(req, current_text)
-    if (
-        base_report.get("status") == "strong"
-        and not base_report.get("blockers")
-        and not one_pager_flags.get("audience_drift")
-        and not one_pager_flags.get("placeholder_proof")
-        and one_pager_flags.get("has_named_proof")
-    ):
-        return current_text, 0
 
     correction = (
-        "You are the critic agent reviewing a grounded one-pager draft before it is shown to the user.\n"
+        "You are the marketing-and-message critic reviewing a grounded one-pager draft before it is shown to the user.\n"
         "Return a revised one-pager only. Keep the same labeled section structure. Do not explain your edits.\n"
         "Preserve grounded facts, approved stats, and approved proof. Do not invent proof.\n"
-        "Make the copy more specific, sharper, and more audience-aware.\n"
+        "Make the copy more specific, sharper, and more buyer-aware.\n"
         "Critic notes:\n"
         + "\n".join(f"- {note}" for note in critic_notes)
         + "\n\nCurrent draft:\n"
@@ -1342,7 +1759,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
         log.exception("generate_failed request_id=%s model=%s", request_id, _model_name())
         raise
     rendered = render_collateral(req.asset_type, output)
-    content_packet = _build_one_pager_packet(output) if req.asset_type == "one-pager" else None
+    content_packet = _enrich_one_pager_packet(req, _build_one_pager_packet(output)) if req.asset_type == "one-pager" else None
     quality_report = _auto_quality_report(
         req,
         output,
@@ -1381,7 +1798,7 @@ def improve(req: ImproveRequest) -> GenerateResponse:
         log.exception("improve_failed request_id=%s model=%s", request_id, _model_name())
         raise
     rendered = render_collateral(req.request.asset_type, output)
-    content_packet = _build_one_pager_packet(output) if req.request.asset_type == "one-pager" else None
+    content_packet = _enrich_one_pager_packet(req.request, _build_one_pager_packet(output)) if req.request.asset_type == "one-pager" else None
     quality_report = _auto_quality_report(
         req.request,
         output,

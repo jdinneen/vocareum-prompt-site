@@ -11,8 +11,6 @@ EXTRA_APPROVED_NAMED_PROOF = [
     "University of Michigan",
     "Iowa State",
     "National Research Platform",
-    "NAIRR Classroom",
-    "U.S. NAIRR Pilot",
     "UC San Diego / GPS",
     "GPS UC San Diego",
 ]

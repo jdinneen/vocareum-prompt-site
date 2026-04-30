@@ -126,6 +126,9 @@ CURATED_PUBLIC_PROOF_NAMES = (
     "UC San Diego / GPS",
     "GPS UC San Diego",
 )
+DISALLOWED_PUBLIC_PROOF_PATTERNS = (
+    re.compile(r"\bnairr\b", re.IGNORECASE),
+)
 
 
 def _utc_now_iso() -> str:
@@ -196,6 +199,11 @@ def _augmented_truth_bundle(base_bundle: dict) -> dict:
     }
     named.update(_snapshot_proof_names())
     named.update(CURATED_PUBLIC_PROOF_NAMES)
+    named = {
+        item
+        for item in named
+        if not any(pattern.search(item) for pattern in DISALLOWED_PUBLIC_PROOF_PATTERNS)
+    }
     bundle["approved_named_proof"] = sorted(named)
     return bundle
 
@@ -542,7 +550,7 @@ def selected_grounding_text(
         if email_block:
             sections.append(email_block)
 
-    if asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}:
+    if asset_type in {"sales-collateral", "sales-deck-brief"}:
         product_matches = matched_products(query_text)
         product_hint = product_matches[0] if product_matches else product
         collateral_block = _collateral_example_block(example_id, data, query_text, product_hint)

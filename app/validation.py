@@ -50,6 +50,9 @@ PROOF_CUES = {
     "partnered with",
     "partnered",
 }
+DISALLOWED_PROOF_PATTERNS = (
+    re.compile(r"\bnairr\b", re.IGNORECASE),
+)
 IGNORED_SENTENCE_PREFIXES = (
     "hi ",
     "hello ",
@@ -323,6 +326,20 @@ def _extract_name_candidates(sentence: str) -> list[str]:
     return names
 
 
+def _extract_single_proof_name(sentence: str) -> list[str]:
+    match = re.search(
+        r"(?i)\bproof:\s*(?:the\s+)?([A-Z]{2,}|[A-Z][A-Za-z]{4,})\b(?=\s+(?:shows?|supports?|proves?|demonstrates?|validates?|reflects?|illustrates?|enables?|delivers?|powers?|uses?)\b)",
+        sentence,
+    )
+    if not match:
+        return []
+    candidate = match.group(1).strip(" .,:;()")
+    lowered = candidate.lower()
+    if any(fragment in lowered for fragment in KNOWN_PRODUCT_FRAGMENTS):
+        return []
+    return [candidate]
+
+
 def _reference_name_variants(candidate: str) -> set[str]:
     words = candidate.split()
     variants = {candidate.strip()}
@@ -399,13 +416,25 @@ def validate_output(
     # and quote checks still apply.
     is_answer_mode = asset_type == "grounded-answer"
 
-    # Names from the user's objective are user-supplied context, not hallucinated proof.
-    objective_names = {n for n in _extract_name_candidates(objective_text)}
-
     for sentence in _sentences(text):
         if _proof_context(sentence):
-            for candidate in _extract_name_candidates(sentence):
+            proof_candidates = _extract_name_candidates(sentence) + _extract_single_proof_name(sentence)
+            seen_candidates: set[str] = set()
+            for candidate in proof_candidates:
+                normalized_candidate = _normalize(candidate)
+                if normalized_candidate in seen_candidates:
+                    continue
+                seen_candidates.add(normalized_candidate)
                 if _looks_like_descriptive_reference(candidate):
+                    continue
+                if any(pattern.search(candidate) for pattern in DISALLOWED_PROOF_PATTERNS):
+                    issues.append(
+                        ValidationIssue(
+                            "disallowed_named_proof",
+                            f"Disallowed named proof or reference: {candidate}",
+                            sentence[:240],
+                        )
+                    )
                     continue
                 # Allow if the candidate matches an approved name exactly, or if
                 # every proper-noun fragment in the candidate is individually approved
@@ -417,12 +446,6 @@ def validate_output(
                     for word in candidate.split(" and ")
                     if word.strip() and word.strip()[0].isupper()
                 ):
-                    continue
-                # Allow names that appear in the user's objective (user-supplied context).
-                if _candidate_matches_allowed_name(candidate, objective_names):
-                    continue
-                # Allow names that appear in the grounding support text.
-                if any(variant in support_text.lower() for variant in _reference_name_variants(candidate)):
                     continue
                 if True:
                     issues.append(
