@@ -567,15 +567,7 @@ def render_deck_html(payload: dict[str, Any]) -> str:
 
 def render_collateral(asset_type: str, output: str) -> dict[str, Any] | None:
     if asset_type == "one-pager":
-        payload = parse_one_pager_text(output)
-        if not payload:
-            return None
-        return {
-            "mode": "html",
-            "kind": "one-pager",
-            "title": payload["headline"],
-            "html": render_one_pager_html(payload),
-        }
+        return None
     if asset_type in {"overview-collateral", "sales-collateral"}:
         payload = parse_overview_text(output)
         if not payload:

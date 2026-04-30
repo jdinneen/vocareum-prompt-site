@@ -554,6 +554,53 @@ def _normalize_approved_stats(text: str) -> str:
     return normalized
 
 
+def _replace_labeled_section(text: str, label: str, new_body: str) -> str:
+    labels = ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"]
+    label_clause = "|".join(re.escape(item) for item in labels)
+    pattern = re.compile(
+        rf"(?ms)^({re.escape(label)}:?\s*)(.*?)(?=^(?:{label_clause}):?\s*|\Z)"
+    )
+    replacement = f"{label}: {new_body.strip()}\n"
+    return pattern.sub(replacement, text, count=1)
+
+
+def _sanitize_one_pager_output(req: GenerateRequest, text: str) -> str:
+    sections = _extract_labeled_sections(
+        text,
+        ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+    )
+    if not sections:
+        return text
+
+    updated = text
+    audience = _resolved_audience(req)
+    audience_entries = [item for item in _section_items(sections.get("Who Uses This", "")) if not _none_like(item)]
+    if audience:
+        target_tokens = _meaningful_phrase_tokens(audience)
+        overlapping = [
+            item for item in audience_entries
+            if audience.lower() in item.lower() or (_meaningful_phrase_tokens(item) & target_tokens)
+        ]
+        if overlapping:
+            audience_entries = overlapping
+        elif sections.get("Who Uses This", ""):
+            audience_entries = [audience]
+    if audience_entries:
+        updated = _replace_labeled_section(updated, "Who Uses This", " | ".join(audience_entries[:3]))
+
+    proof_entries = [
+        item for item in _section_items(sections.get("Proof", ""))
+        if not _none_like(item) and not _proof_entry_is_placeholder(item)
+    ]
+    updated = _replace_labeled_section(updated, "Proof", " | ".join(proof_entries[:3]) if proof_entries else "None")
+
+    quote_value = sections.get("Quote", "")
+    if _none_like(quote_value):
+        updated = _replace_labeled_section(updated, "Quote", "None")
+
+    return updated.strip()
+
+
 def _post_process(req: GenerateRequest, text: str) -> str:
     cleaned = text.replace("“", "").replace("”", "").replace('"', "").strip()
     cleaned = _normalize_approved_stats(cleaned)
@@ -561,6 +608,8 @@ def _post_process(req: GenerateRequest, text: str) -> str:
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     elif req.asset_type in {"sales-collateral", "one-pager"}:
         cleaned = _sanitize_proof_sections(cleaned)
+        if req.asset_type == "one-pager":
+            cleaned = _sanitize_one_pager_output(req, cleaned)
         if req.asset_type == "sales-collateral":
             cleaned = _normalize_sales_collateral(cleaned)
     elif req.asset_type == "sales-deck-brief":

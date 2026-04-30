@@ -11,6 +11,7 @@ from app.main import (
     _auto_quality_report,
     _post_process,
     _sanitize_proof_sections,
+    _sanitize_one_pager_output,
     app,
 )
 from app.renderers import parse_deck_text, parse_overview_text
@@ -376,6 +377,35 @@ def test_one_pager_quality_penalizes_placeholder_proof_and_audience_drift():
     assert report["overall_score"] < 4.3
     assert any("placeholder proof" in item.lower() for item in report["blockers"])
     assert any("named audience" in item.lower() for item in report["improvements"])
+
+
+def test_sanitize_one_pager_output_keeps_named_audience_and_none_proof():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="Simulations",
+        audience="Coursera",
+        objective="Build a one-pager for Simulations for Coursera.",
+    )
+    output = (
+        "Headline: Simulations for Coursera Learners\n"
+        "Subhead: Give Coursera learners AI-generated environments.\n"
+        "Stat Bar: 1M+ - annual unique learners\n"
+        "Problem: Learners need safe practice environments.\n"
+        "How It Works: Generate scenarios | Practice judgment | Capture evidence\n"
+        "Who Uses This: Coursera | Healthcare | Business | Workforce-training teams\n"
+        "Proof: April 2026 source docs - current workflow/category\n"
+        "Quote: None.\n"
+        "CTA: Contact Vocareum to scope a pilot."
+    )
+
+    sanitized = _sanitize_one_pager_output(req, output)
+
+    assert "Who Uses This: Coursera" in sanitized
+    assert "Healthcare" not in sanitized
+    assert "Business" not in sanitized
+    assert "Proof: None" in sanitized
+    assert "source docs" not in sanitized
+    assert "Quote: None" in sanitized
 
 
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
