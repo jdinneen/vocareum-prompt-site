@@ -6,6 +6,8 @@ from app.main import (
     GenerateRequest,
     _build_user_prompt,
     _brief_needs_more_detail,
+    _best_effort_one_pager_packet,
+    _ensure_one_pager_output_shape,
     _max_output_tokens,
     _one_pager_missing_sections,
     _auto_quality_report,
@@ -782,6 +784,49 @@ def test_one_pager_enrichment_prefers_nrp_alias_over_generic_learning_proof():
     assert packet["stats"][0] == {"value": "7,000+", "label": "Institutions and organizations"}
     assert packet["logo_strip"] == []
     assert packet["footer_quote"] is None
+
+
+def test_best_effort_one_pager_packet_fills_missing_sections_for_thin_brief():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        objective="Create a concise one-pager content packet based on this brief: vocareum ai products",
+    )
+    partial = (
+        "Audience: For institutions and organizations supporting AI education and research.\n"
+        "Headline: Vocareum supports advanced AI learning and research environments.\n"
+        "Subhead: The Vocareum platform provides an environment for AI-focused education and research initiatives.\n"
+        "Stat Bar: 2M+ - AWS learners | 1M+ - annual unique learners | 5M+ - total platform learners | 7,000+ - institutions and organizations\n"
+        "Problem: Institutions and organizations require robust environments to support AI-focused learning and research.\n"
+        "How It Works: Provide cloud-based labs | Integrate essential tools | Support complex AI workflows\n"
+    )
+
+    packet = _best_effort_one_pager_packet(req, partial)
+
+    assert packet["headline"] == "Vocareum supports advanced AI learning and research environments."
+    assert packet["audiences"] == ["institutions and organizations supporting AI education and research"]
+    assert packet["proofs"] == []
+    assert packet["cta"] == "Review which Vocareum AI product fits your workflow."
+
+
+def test_ensure_one_pager_output_shape_appends_missing_sections():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        objective="Create a concise one-pager content packet based on this brief: vocareum ai products",
+    )
+    partial = (
+        "Audience: For institutions and organizations supporting AI education and research.\n"
+        "Headline: Vocareum supports advanced AI learning and research environments.\n"
+        "Subhead: The Vocareum platform provides an environment for AI-focused education and research initiatives.\n"
+        "Stat Bar: 2M+ - AWS learners | 1M+ - annual unique learners | 5M+ - total platform learners | 7,000+ - institutions and organizations\n"
+        "Problem: Institutions and organizations require robust environments to support AI-focused learning and research.\n"
+        "How It Works: Provide cloud-based labs | Integrate essential tools | Support complex AI workflows\n"
+    )
+
+    output = _ensure_one_pager_output_shape(req, partial)
+
+    assert "Who Uses This:" in output
+    assert "Proof: None" in output
+    assert "CTA: Review which Vocareum AI product fits your workflow." in output
 
 
 def test_one_pager_quality_with_low_specificity_and_weak_proof_is_needs_work():

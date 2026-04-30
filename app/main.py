@@ -826,6 +826,151 @@ def _build_one_pager_packet(text: str) -> dict | None:
     }
 
 
+def _fallback_one_pager_audience(req: GenerateRequest, sections: dict[str, str]) -> str:
+    audience_line = sections.get("Audience", "").strip()
+    if audience_line:
+        return audience_line
+    audience = _resolved_audience(req)
+    if audience:
+        return f"For {audience}"
+    if _resolved_product(req):
+        return f"For teams evaluating {_resolved_product(req)}"
+    return "For teams evaluating Vocareum AI products"
+
+
+def _fallback_one_pager_audiences(req: GenerateRequest, sections: dict[str, str]) -> list[str]:
+    audiences = [item for item in _section_items(sections.get("Who Uses This", "")) if not _none_like(item)]
+    if audiences:
+        return audiences[:3]
+    audience_line = _fallback_one_pager_audience(req, sections)
+    audience_line = re.sub(r"^for\s+", "", audience_line, flags=re.IGNORECASE).strip(" .")
+    if audience_line:
+        return [audience_line]
+    for product in _resolved_products(req):
+        buyers = ONE_PAGER_DEFAULT_BUYERS.get(product, [])
+        if buyers:
+            return buyers[:3]
+    return ["Teams evaluating Vocareum AI products"]
+
+
+def _fallback_one_pager_headline(req: GenerateRequest, sections: dict[str, str]) -> str:
+    if sections.get("Headline", "").strip():
+        return sections["Headline"].strip()
+    product = _resolved_product(req)
+    if product:
+        return f"Explore {product} for governed AI workflows"
+    return "Explore Vocareum AI products for AI learning and research"
+
+
+def _fallback_one_pager_subhead(req: GenerateRequest, sections: dict[str, str]) -> str:
+    if sections.get("Subhead", "").strip():
+        return sections["Subhead"].strip()
+    if sections.get("Problem", "").strip():
+        return sections["Problem"].strip()
+    product = _resolved_product(req)
+    if product:
+        return f"Vocareum supports hands-on, governed workflows around {product} for teams that need AI learning, experimentation, or research environments."
+    return "Vocareum supports hands-on AI learning, experimentation, and governed access across education, research, and training workflows."
+
+
+def _fallback_one_pager_problem(req: GenerateRequest, sections: dict[str, str]) -> str:
+    if sections.get("Problem", "").strip():
+        return sections["Problem"].strip()
+    product = _resolved_product(req)
+    if product:
+        return f"Teams evaluating {product} need environments that are easier to launch, govern, and scale without setup drift."
+    return "Teams evaluating AI products need environments that are easier to launch, govern, and scale without setup drift."
+
+
+def _fallback_one_pager_steps(req: GenerateRequest, sections: dict[str, str]) -> list[str]:
+    steps = _section_items(sections.get("How It Works", ""))[:4]
+    if steps:
+        return steps
+    for product in _resolved_products(req):
+        if product == "AI Gateway":
+            return ["Connect approved models", "Apply access controls", "Monitor usage and spend"]
+        if product == "AI Notebook":
+            return ["Launch notebook environments", "Provide governed compute", "Support assignments and grading"]
+        if product == "AI Compass":
+            return ["Guide learner practice", "Provide AI support", "Surface faculty-facing insights"]
+        if product == "GPU & CPU Compute":
+            return ["Access dedicated GPUs", "Run high-performance clusters", "Use bare metal when needed"]
+    return ["Review the workflow", "Match the right Vocareum product", "Launch with governed access"]
+
+
+def _fallback_one_pager_cta(req: GenerateRequest) -> str:
+    product = _resolved_product(req)
+    audience = _resolved_audience(req)
+    if product and audience:
+        return f"Review whether {product} fits {audience}."
+    if product:
+        return f"Review where {product} fits your workflow."
+    return "Review which Vocareum AI product fits your workflow."
+
+
+def _best_effort_one_pager_packet(req: GenerateRequest, text: str) -> dict:
+    packet = _build_one_pager_packet(text)
+    if packet:
+        return packet
+
+    sections = _extract_labeled_sections(
+        text,
+        ["Audience", "Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+    )
+    stats = _split_packet_dash_entries(sections.get("Stat Bar", ""))[:4] or _one_pager_stat_bar(req)
+    proofs = [
+        {"reference": item["value"], "signal": item["label"]}
+        for item in _split_packet_dash_entries(sections.get("Proof", ""))[:4]
+        if item["value"] and not _none_like(item["value"])
+    ]
+    return {
+        "audience": _fallback_one_pager_audience(req, sections),
+        "headline": _fallback_one_pager_headline(req, sections),
+        "subhead": _fallback_one_pager_subhead(req, sections),
+        "stats": stats,
+        "problem": _fallback_one_pager_problem(req, sections),
+        "steps": _fallback_one_pager_steps(req, sections),
+        "audiences": _fallback_one_pager_audiences(req, sections),
+        "proofs": proofs,
+        "quote": "" if _none_like(sections.get("Quote", "")) else sections.get("Quote", ""),
+        "cta": sections.get("CTA", "").strip() or _fallback_one_pager_cta(req),
+    }
+
+
+def _serialize_one_pager_packet(packet: dict) -> str:
+    stats = " | ".join(
+        f"{item.get('value', '').strip()} - {item.get('label', '').strip()}".strip(" -")
+        for item in packet.get("stats", [])
+        if item.get("value")
+    )
+    proofs = " | ".join(
+        f"{item.get('reference', '').strip()} - {item.get('signal', '').strip()}".rstrip(" -")
+        for item in packet.get("proofs", [])
+        if item.get("reference")
+    ) or "None"
+    audiences = " | ".join(item.strip() for item in packet.get("audiences", []) if item and item.strip())
+    steps = " | ".join(item.strip() for item in packet.get("steps", []) if item and item.strip())
+    lines = [
+        f"Audience: {packet.get('audience', '').strip()}",
+        f"Headline: {packet.get('headline', '').strip()}",
+        f"Subhead: {packet.get('subhead', '').strip()}",
+        f"Stat Bar: {stats}",
+        f"Problem: {packet.get('problem', '').strip()}",
+        f"How It Works: {steps}",
+        f"Who Uses This: {audiences or 'None'}",
+        f"Proof: {proofs}",
+        f"CTA: {packet.get('cta', '').strip()}",
+    ]
+    return "\n".join(line for line in lines if not line.endswith(": "))
+
+
+def _ensure_one_pager_output_shape(req: GenerateRequest, text: str) -> str:
+    if _build_one_pager_packet(text):
+        return text
+    packet = _best_effort_one_pager_packet(req, text)
+    return _serialize_one_pager_packet(packet)
+
+
 def _sanitize_one_pager_output(req: GenerateRequest, text: str) -> str:
     sections = _extract_labeled_sections(
         text,
@@ -1934,8 +2079,10 @@ def generate(req: GenerateRequest) -> GenerateResponse:
     except Exception:
         log.exception("generate_failed request_id=%s model=%s", request_id, _model_name())
         raise
+    if req.asset_type == "one-pager":
+        output = _ensure_one_pager_output_shape(req, output)
     rendered = render_collateral(req.asset_type, output)
-    content_packet = _enrich_one_pager_packet(req, _build_one_pager_packet(output)) if req.asset_type == "one-pager" else None
+    content_packet = _enrich_one_pager_packet(req, _best_effort_one_pager_packet(req, output)) if req.asset_type == "one-pager" else None
     quality_report = _auto_quality_report(
         req,
         output,
@@ -1973,8 +2120,10 @@ def improve(req: ImproveRequest) -> GenerateResponse:
     except Exception:
         log.exception("improve_failed request_id=%s model=%s", request_id, _model_name())
         raise
+    if req.request.asset_type == "one-pager":
+        output = _ensure_one_pager_output_shape(req.request, output)
     rendered = render_collateral(req.request.asset_type, output)
-    content_packet = _enrich_one_pager_packet(req.request, _build_one_pager_packet(output)) if req.request.asset_type == "one-pager" else None
+    content_packet = _enrich_one_pager_packet(req.request, _best_effort_one_pager_packet(req.request, output)) if req.request.asset_type == "one-pager" else None
     quality_report = _auto_quality_report(
         req.request,
         output,
