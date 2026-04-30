@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-28T00:02:52.270864+00:00",
+  "generated_at": "2026-04-30T18:00:26.199809+00:00",
   "source_files": [
     "AGENTS.md",
     "core/shared_rules/email/approved_numeric_claims.json",
@@ -44,7 +44,14 @@
     "JPMorgan Chase",
     "Carnegie Mellon",
     "Georgia Tech",
-    "UC San Diego"
+    "UC San Diego",
+    "University of Michigan",
+    "Iowa State",
+    "National Research Platform",
+    "NAIRR Classroom",
+    "U.S. NAIRR Pilot",
+    "UC San Diego / GPS",
+    "GPS UC San Diego"
   ],
   "approved_links": {
     "Jon Dinneen": "https://www.linkedin.com/in/jondinneen/",
@@ -112,8 +119,11 @@
     "OpenAI Codex"
   ],
   "supported_workflows": [
+    "grounded-answer",
     "outbound-email",
     "reply-email",
-    "sales-collateral"
+    "sales-collateral",
+    "one-pager",
+    "sales-deck-brief"
   ]
 }

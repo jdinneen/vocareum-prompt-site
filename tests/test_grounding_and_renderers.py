@@ -283,11 +283,14 @@ def test_parse_overview_text_uses_current_sales_collateral_sections():
 def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch):
     monkeypatch.setattr(
         "app.main.load_grounding",
-        lambda: {
+        lambda force=False: {
             "source": {
                 "title": SOURCE_TITLE,
                 "last_reviewed": "2026-04-27",
                 "doc_url": "https://example.com/catalog",
+                "modified_time": "2026-04-28T18:53:45.475Z",
+                "version": "257",
+                "checked_at": "2026-04-30T18:00:00Z",
             },
             "mode": "live",
             "warnings": ["example warning"],
@@ -296,6 +299,8 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
                 "default_public_stats": ["5M+ learners served"],
             },
             "style_palette": {"slate": "#2e3a41"},
+            "cache_loaded_at": "2026-04-30T18:00:00Z",
+            "cache_ttl_seconds": 120,
         },
     )
 
@@ -307,6 +312,8 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
     assert payload["default_public_stats"] == ["5M+ learners served"]
     assert payload["grounding_mode"] == "live"
     assert payload["grounding_warnings"] == ["example warning"]
+    assert payload["source"]["version"] == "257"
+    assert payload["cache_ttl_seconds"] == 120
     assert [item["id"] for item in payload["deliverable_types"]] == [
         "outbound-email",
         "reply-email",
@@ -316,10 +323,75 @@ def test_meta_uses_default_public_stats_and_exposes_grounding_state(monkeypatch)
     ]
 
 
+def test_meta_force_refresh_passes_force_flag(monkeypatch):
+    calls: list[bool] = []
+
+    def fake_load_grounding(force=False):
+        calls.append(force)
+        return {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+                "modified_time": "2026-04-28T18:53:45.475Z",
+                "version": "257",
+                "checked_at": "2026-04-30T18:00:00Z",
+            },
+            "mode": "live",
+            "warnings": [],
+            "catalog_sections": {"AI Gateway": "section"},
+            "truth_bundle": {"default_public_stats": []},
+            "style_palette": {"slate": "#2e3a41"},
+            "cache_loaded_at": "2026-04-30T18:00:00Z",
+            "cache_ttl_seconds": 120,
+        }
+
+    monkeypatch.setattr("app.main.load_grounding", fake_load_grounding)
+
+    client = TestClient(app)
+    response = client.get("/api/meta?force=true")
+
+    assert response.status_code == 200
+    assert calls == [True]
+
+
+def test_source_refresh_endpoint_forces_live_reload(monkeypatch):
+    calls: list[bool] = []
+
+    def fake_load_grounding(force=False):
+        calls.append(force)
+        return {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+                "modified_time": "2026-04-28T18:53:45.475Z",
+                "version": "257",
+                "checked_at": "2026-04-30T18:00:00Z",
+            },
+            "mode": "live",
+            "warnings": [],
+            "catalog_sections": {"AI Gateway": "section"},
+            "truth_bundle": {"default_public_stats": []},
+            "style_palette": {"slate": "#2e3a41"},
+            "cache_loaded_at": "2026-04-30T18:00:00Z",
+            "cache_ttl_seconds": 120,
+        }
+
+    monkeypatch.setattr("app.main.load_grounding", fake_load_grounding)
+
+    client = TestClient(app)
+    response = client.post("/api/source/refresh")
+
+    assert response.status_code == 200
+    assert response.json()["source"]["version"] == "257"
+    assert calls == [True]
+
+
 def test_generate_endpoint_returns_brief_error_for_thin_prompt(monkeypatch):
     monkeypatch.setattr(
         "app.main.load_grounding",
-        lambda: {
+        lambda force=False: {
             "source": {"title": SOURCE_TITLE, "last_reviewed": "2026-04-27", "doc_url": "https://example.com/catalog"},
             "mode": "live",
             "warnings": [],
@@ -399,6 +471,40 @@ def test_validation_rejects_partnership_rollout_reference_in_reply():
     )
 
     assert any(issue.code == "disallowed_named_proof" for issue in result.issues)
+
+
+def test_validation_ignores_descriptive_capability_heading_in_proof_section():
+    result = validate_output(
+        asset_type="one-pager",
+        text="Proof: Unified AI Model Access helps teams govern model routing, budget controls, and usage visibility.",
+        support_text="AI Gateway provides governed model access with routing, usage visibility, and budget controls.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": ["University of Michigan"],
+            "allowed_reference_names": ["Vocareum", "AI Gateway"],
+        },
+        objective_text="Build a one-pager for AI Gateway.",
+    )
+
+    assert not any(issue.code == "disallowed_named_proof" for issue in result.issues)
+
+
+def test_validation_allows_supported_proof_name_with_reference_suffix():
+    result = validate_output(
+        asset_type="one-pager",
+        text="Proof: The University of Michigan partnership shows governed AI access at campus scale.",
+        support_text="University of Michigan is the clearest named public deployment proof for AI Gateway and shows governed AI access at campus scale.",
+        truth_bundle={
+            "approved_numeric_claims": [],
+            "default_public_stats": [],
+            "approved_named_proof": ["University of Michigan"],
+            "allowed_reference_names": ["Vocareum", "AI Gateway"],
+        },
+        objective_text="Build a one-pager for AI Gateway.",
+    )
+
+    assert result.ok
 
 
 def test_numeric_phrase_extraction_stops_at_sentence_boundary():

@@ -1,13 +1,51 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
 SITE_ROOT = Path(__file__).resolve().parents[1]
+EXTRA_APPROVED_NAMED_PROOF = [
+    "University of Michigan",
+    "Iowa State",
+    "National Research Platform",
+    "NAIRR Classroom",
+    "U.S. NAIRR Pilot",
+    "UC San Diego / GPS",
+    "GPS UC San Diego",
+]
 OUTPUT_PATH = SITE_ROOT / "app" / "data" / "governed_truth_bundle.json"
+
+
+def _resolve_aimktg_root() -> Path:
+    candidates = []
+    env_root = os.environ.get("AIMKTG_ROOT", "").strip()
+    if env_root:
+        candidates.append(Path(env_root).expanduser())
+    candidates.extend(
+        [
+            Path.cwd(),
+            SITE_ROOT,
+            SITE_ROOT.parent,
+            Path("/Users/jondinneen/Desktop/AIMktg"),
+        ]
+    )
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(parent)
+
+    for candidate in candidates:
+        agents = candidate / "AGENTS.md"
+        numeric = candidate / "core" / "shared_rules" / "email" / "approved_numeric_claims.json"
+        links = candidate / "core" / "shared_rules" / "email" / "approved_links.json"
+        if agents.exists() and numeric.exists() and links.exists():
+            return candidate
+
+    raise FileNotFoundError("Could not locate AIMktg repo root for governed truth bundle build.")
+
+
+REPO_ROOT = _resolve_aimktg_root()
 AGENTS_PATH = REPO_ROOT / "AGENTS.md"
 APPROVED_NUMERIC_PATH = REPO_ROOT / "core" / "shared_rules" / "email" / "approved_numeric_claims.json"
 APPROVED_LINKS_PATH = REPO_ROOT / "core" / "shared_rules" / "email" / "approved_links.json"
@@ -50,6 +88,7 @@ def build_truth_bundle() -> dict:
         _split_csvish(stats_rows.get("Key partners", ""))
         + _split_csvish(stats_rows.get("Enterprise examples", ""))
         + _split_csvish(stats_rows.get("Academic examples", ""))
+        + EXTRA_APPROVED_NAMED_PROOF
     )
 
     allowed_reference_names = [
@@ -114,9 +153,12 @@ def build_truth_bundle() -> dict:
             "OpenAI Codex",
         ],
         "supported_workflows": [
+            "grounded-answer",
             "outbound-email",
             "reply-email",
             "sales-collateral",
+            "one-pager",
+            "sales-deck-brief",
         ],
     }
 

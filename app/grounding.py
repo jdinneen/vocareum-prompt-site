@@ -5,6 +5,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import google.auth
@@ -116,6 +117,19 @@ STYLE_PALETTE = {
 
 _BUNDLE_CACHE: dict[str, object] = {"bundle": None, "loaded_at": 0.0}
 _TRUTH_CACHE: dict[str, object] = {"bundle": None}
+CURATED_PUBLIC_PROOF_NAMES = (
+    "University of Michigan",
+    "Iowa State",
+    "National Research Platform",
+    "NAIRR Classroom",
+    "U.S. NAIRR Pilot",
+    "UC San Diego / GPS",
+    "GPS UC San Diego",
+)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _truth_bundle() -> dict:
@@ -154,6 +168,35 @@ def _truth_bundle() -> dict:
             "allowed_reference_names": ["Vocareum"],
         }
     _TRUTH_CACHE["bundle"] = bundle
+    return bundle
+
+
+def _snapshot_proof_names() -> set[str]:
+    if not GROUNDING_FILE.exists():
+        return set()
+    try:
+        snapshot = json.loads(GROUNDING_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return set()
+
+    names: set[str] = set()
+    for item in snapshot.get("proof_anchors", []):
+        name = str(item.get("name", "")).strip()
+        if name:
+            names.add(name)
+    return names
+
+
+def _augmented_truth_bundle(base_bundle: dict) -> dict:
+    bundle = json.loads(json.dumps(base_bundle))
+    named = {
+        item.strip()
+        for item in bundle.get("approved_named_proof", [])
+        if str(item).strip()
+    }
+    named.update(_snapshot_proof_names())
+    named.update(CURATED_PUBLIC_PROOF_NAMES)
+    bundle["approved_named_proof"] = sorted(named)
     return bundle
 
 
@@ -322,9 +365,14 @@ def _fallback_bundle() -> dict:
 
     catalog_text = CATALOG_FILE.read_text(encoding="utf-8") if CATALOG_FILE.exists() else ""
     catalog_front_matter, catalog_sections = _parse_named_sections(catalog_text, PRODUCT_SECTION_TITLES)
-    truth_bundle = _truth_bundle()
+    truth_bundle = _augmented_truth_bundle(_truth_bundle())
+    fallback_source = dict(snapshot["source"])
+    fallback_source.setdefault("doc_url", f"https://docs.google.com/document/d/{VOC_PRODUCT_CATALOG_DOC_ID}/edit")
+    fallback_source.setdefault("modified_time", "Unknown")
+    fallback_source.setdefault("version", "fallback-snapshot")
+    fallback_source["checked_at"] = _utc_now_iso()
     return {
-        "source": snapshot["source"],
+        "source": fallback_source,
         "mode": "fallback",
         "warnings": ["Live Google Drive grounding unavailable. Using local fallback snapshot."],
         "catalog_front_matter": catalog_front_matter,
@@ -336,9 +384,31 @@ def _fallback_bundle() -> dict:
     }
 
 
+def _catalog_source_metadata(service, catalog_text: str) -> dict:
+    doc_url = f"https://docs.google.com/document/d/{VOC_PRODUCT_CATALOG_DOC_ID}/edit"
+    checked_at = _utc_now_iso()
+    try:
+        metadata = service.files().get(
+            fileId=VOC_PRODUCT_CATALOG_DOC_ID,
+            fields="id,name,modifiedTime,version,webViewLink,mimeType",
+            supportsAllDrives=True,
+        ).execute()
+    except Exception:
+        metadata = {}
+
+    return {
+        "title": SOURCE_TITLE,
+        "last_reviewed": _parse_last_reviewed(catalog_text),
+        "doc_url": metadata.get("webViewLink") or doc_url,
+        "modified_time": metadata.get("modifiedTime", "Unknown"),
+        "version": str(metadata.get("version", "")).strip() or "Unknown",
+        "checked_at": checked_at,
+    }
+
+
 def _load_live_bundle() -> dict:
     service = _drive_service()
-    truth_bundle = _truth_bundle()
+    truth_bundle = _augmented_truth_bundle(_truth_bundle())
 
     catalog_text = _export_doc_text(service, VOC_PRODUCT_CATALOG_DOC_ID)
     catalog_front_matter, catalog_sections = _parse_named_sections(catalog_text, PRODUCT_SECTION_TITLES)
@@ -365,11 +435,7 @@ def _load_live_bundle() -> dict:
             continue
 
     return {
-        "source": {
-            "title": SOURCE_TITLE,
-            "last_reviewed": _parse_last_reviewed(catalog_text),
-            "doc_url": f"https://docs.google.com/document/d/{VOC_PRODUCT_CATALOG_DOC_ID}/edit",
-        },
+        "source": _catalog_source_metadata(service, catalog_text),
         "mode": "live",
         "warnings": [],
         "catalog_front_matter": catalog_front_matter,
@@ -381,11 +447,11 @@ def _load_live_bundle() -> dict:
     }
 
 
-def load_grounding() -> dict:
+def load_grounding(force: bool = False) -> dict:
     now = time.time()
     bundle = _BUNDLE_CACHE.get("bundle")
     loaded_at = float(_BUNDLE_CACHE.get("loaded_at") or 0.0)
-    if bundle and now - loaded_at < LIVE_GROUNDING_TTL_SECONDS:
+    if bundle and not force and now - loaded_at < LIVE_GROUNDING_TTL_SECONDS:
         return bundle
 
     try:
@@ -395,6 +461,9 @@ def load_grounding() -> dict:
         warnings = list(fresh_bundle.get("warnings", []))
         warnings.append(f"Live grounding error: {exc.__class__.__name__}")
         fresh_bundle["warnings"] = warnings
+
+    fresh_bundle["cache_loaded_at"] = _utc_now_iso()
+    fresh_bundle["cache_ttl_seconds"] = LIVE_GROUNDING_TTL_SECONDS
 
     _BUNDLE_CACHE["bundle"] = fresh_bundle
     _BUNDLE_CACHE["loaded_at"] = now

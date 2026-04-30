@@ -233,6 +233,73 @@ GENERIC_NAME_STARTS = {
     "Each", "Every", "These", "Those", "Using", "Through", "Within",
     "Managed", "Governed", "Centralized", "Distributed", "Automated",
 }
+ABSTRACT_REFERENCE_WORDS = {
+    "access",
+    "adoption",
+    "agent",
+    "agents",
+    "analytics",
+    "automation",
+    "capability",
+    "capabilities",
+    "compute",
+    "control",
+    "controls",
+    "deployment",
+    "deployments",
+    "enablement",
+    "experience",
+    "experiences",
+    "foundation",
+    "governance",
+    "governed",
+    "infrastructure",
+    "integration",
+    "integrations",
+    "management",
+    "model",
+    "models",
+    "operations",
+    "orchestration",
+    "policy",
+    "readiness",
+    "resource",
+    "resources",
+    "routing",
+    "sandbox",
+    "sandboxes",
+    "security",
+    "support",
+    "training",
+    "unified",
+    "usage",
+    "utilization",
+    "visibility",
+    "workflow",
+    "workflows",
+}
+ENTITY_HINT_WORDS = {
+    "academy",
+    "classroom",
+    "college",
+    "district",
+    "institute",
+    "pilot",
+    "school",
+    "university",
+}
+TRAILING_REFERENCE_WORDS = {
+    "case",
+    "deployment",
+    "integration",
+    "partnership",
+    "pilot",
+    "platform",
+    "program",
+    "rollout",
+    "story",
+    "study",
+}
 
 
 def _extract_name_candidates(sentence: str) -> list[str]:
@@ -254,6 +321,50 @@ def _extract_name_candidates(sentence: str) -> list[str]:
             continue
         names.append(candidate)
     return names
+
+
+def _reference_name_variants(candidate: str) -> set[str]:
+    words = candidate.split()
+    variants = {candidate.strip()}
+    if words and words[0].lower() == "the":
+        variants.add(" ".join(words[1:]).strip())
+        words = words[1:]
+    while words and words[-1].lower().strip(".,:;()") in TRAILING_REFERENCE_WORDS:
+        words = words[:-1]
+        trimmed = " ".join(words).strip()
+        if trimmed:
+            variants.add(trimmed)
+    return {_normalize(item) for item in variants if item.strip()}
+
+
+def _candidate_matches_allowed_name(candidate: str, names: set[str]) -> bool:
+    normalized_names = {_normalize(name) for name in names if name.strip()}
+    variants = _reference_name_variants(candidate)
+    return any(
+        variant == allowed
+        or variant.startswith(f"{allowed} ")
+        or allowed.startswith(f"{variant} ")
+        for variant in variants
+        for allowed in normalized_names
+        if variant and allowed
+    )
+
+
+def _looks_like_descriptive_reference(candidate: str) -> bool:
+    words = [token for token in re.findall(r"[A-Za-z0-9.+&/-]+", candidate) if token]
+    lowered = [word.lower() for word in words]
+    if len(lowered) < 2:
+        return False
+    if any(word in ENTITY_HINT_WORDS for word in lowered):
+        return False
+    if any(any(ch.isdigit() for ch in word) or "." in word or "&" in word for word in words):
+        return False
+    abstract_hits = sum(1 for word in lowered if word in ABSTRACT_REFERENCE_WORDS)
+    if abstract_hits >= max(2, len(lowered) - 1):
+        return True
+    if lowered[0] in {word.lower() for word in GENERIC_NAME_STARTS} and abstract_hits >= 1:
+        return True
+    return False
 
 
 def validate_output(
@@ -294,10 +405,12 @@ def validate_output(
     for sentence in _sentences(text):
         if _proof_context(sentence):
             for candidate in _extract_name_candidates(sentence):
+                if _looks_like_descriptive_reference(candidate):
+                    continue
                 # Allow if the candidate matches an approved name exactly, or if
                 # every proper-noun fragment in the candidate is individually approved
                 # (handles "AWS Academy and DeepLearning.AI" as two approved names).
-                if candidate in allowed_proof_names:
+                if _candidate_matches_allowed_name(candidate, allowed_proof_names):
                     continue
                 if allowed_proof_names and all(
                     any(name in candidate for name in allowed_proof_names)
@@ -306,10 +419,10 @@ def validate_output(
                 ):
                     continue
                 # Allow names that appear in the user's objective (user-supplied context).
-                if candidate in objective_names:
+                if _candidate_matches_allowed_name(candidate, objective_names):
                     continue
                 # Allow names that appear in the grounding support text.
-                if candidate.lower() in support_text.lower():
+                if any(variant in support_text.lower() for variant in _reference_name_variants(candidate)):
                     continue
                 if True:
                     issues.append(

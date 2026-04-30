@@ -34,6 +34,10 @@ class GenerateResponse(BaseModel):
     model: str
     source_title: str
     source_last_reviewed: str
+    source_doc_url: str | None = None
+    source_modified_time: str | None = None
+    source_version: str | None = None
+    source_checked_at: str | None = None
     grounding_mode: str
     grounding_warnings: list[str] = Field(default_factory=list)
     request_id: str
@@ -49,6 +53,34 @@ class ImproveRequest(BaseModel):
     current_output: str = Field(..., min_length=20, max_length=20000)
     rating: int = Field(default=3, ge=1, le=5)
     notes: str = Field(default="", max_length=2000)
+
+
+def _source_response_fields(data: dict) -> dict:
+    source = data["source"]
+    return {
+        "source_title": source["title"],
+        "source_last_reviewed": source["last_reviewed"],
+        "source_doc_url": source.get("doc_url"),
+        "source_modified_time": source.get("modified_time"),
+        "source_version": source.get("version"),
+        "source_checked_at": source.get("checked_at"),
+    }
+
+
+def _meta_payload(data: dict) -> dict:
+    truth_bundle = data["truth_bundle"]
+    return {
+        "model": _model_name(),
+        "source": data["source"],
+        "grounding_mode": data.get("mode", "live"),
+        "grounding_warnings": data.get("warnings", []),
+        "default_public_stats": truth_bundle.get("default_public_stats", []),
+        "style_palette": data["style_palette"],
+        "products": sorted(item for item in data.get("catalog_sections", {}).keys() if not item.startswith("All ")),
+        "deliverable_types": DELIVERABLE_TYPES,
+        "cache_loaded_at": data.get("cache_loaded_at"),
+        "cache_ttl_seconds": data.get("cache_ttl_seconds"),
+    }
 
 
 def _require_api_key() -> str:
@@ -791,25 +823,25 @@ def health() -> dict:
         "model": _model_name(),
         "source_title": source["title"],
         "source_last_reviewed": source["last_reviewed"],
+        "source_doc_url": source.get("doc_url"),
+        "source_modified_time": source.get("modified_time"),
+        "source_version": source.get("version"),
+        "source_checked_at": source.get("checked_at"),
         "grounding_mode": grounding.get("mode", "live"),
         "grounding_warnings": grounding.get("warnings", []),
     }
 
 
 @app.get("/api/meta")
-def meta() -> dict:
-    data = load_grounding()
-    truth_bundle = data["truth_bundle"]
-    return {
-        "model": _model_name(),
-        "source": data["source"],
-        "grounding_mode": data.get("mode", "live"),
-        "grounding_warnings": data.get("warnings", []),
-        "default_public_stats": truth_bundle.get("default_public_stats", []),
-        "style_palette": data["style_palette"],
-        "products": sorted(item for item in data.get("catalog_sections", {}).keys() if not item.startswith("All ")),
-        "deliverable_types": DELIVERABLE_TYPES,
-    }
+def meta(force: bool = False) -> dict:
+    data = load_grounding(force=force)
+    return _meta_payload(data)
+
+
+@app.post("/api/source/refresh")
+def source_refresh() -> dict:
+    data = load_grounding(force=True)
+    return _meta_payload(data)
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
@@ -834,8 +866,7 @@ def generate(req: GenerateRequest) -> GenerateResponse:
     return GenerateResponse(
         output=output,
         model=_model_name(),
-        source_title=data["source"]["title"],
-        source_last_reviewed=data["source"]["last_reviewed"],
+        **_source_response_fields(data),
         grounding_mode=data.get("mode", "live"),
         grounding_warnings=data.get("warnings", []),
         request_id=request_id,
@@ -875,8 +906,7 @@ def improve(req: ImproveRequest) -> GenerateResponse:
     return GenerateResponse(
         output=output,
         model=_model_name(),
-        source_title=data["source"]["title"],
-        source_last_reviewed=data["source"]["last_reviewed"],
+        **_source_response_fields(data),
         grounding_mode=data.get("mode", "live"),
         grounding_warnings=data.get("warnings", []),
         request_id=request_id,
