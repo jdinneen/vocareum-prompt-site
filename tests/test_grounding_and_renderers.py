@@ -408,6 +408,39 @@ def test_sanitize_one_pager_output_keeps_named_audience_and_none_proof():
     assert "Quote: None" in sanitized
 
 
+def test_one_pager_without_named_proof_is_not_strong():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="Simulations",
+        audience="Coursera",
+        objective="Build a one-pager for Simulations for Coursera.",
+    )
+    output = (
+        "Headline: Deliver AI-Generated Scenario Practice for Coursera Learners\n"
+        "Subhead: Simulations provide Coursera with AI-generated environments for controlled practice.\n"
+        "Stat Bar: 1M+ - annual unique learners | 7,000+ - institutions and organizations\n"
+        "Problem: Learners need scenario-based practice before live use.\n"
+        "How It Works: Generate scenarios | Practice decisions | Capture evidence\n"
+        "Who Uses This: Coursera\n"
+        "Proof: None\n"
+        "Quote: None\n"
+        "CTA: Learn how to integrate AI-generated simulations into your courses."
+    )
+    report = _auto_quality_report(
+        req,
+        output,
+        "Simulations provides AI-generated environments for roleplay, judgment, and workflow rehearsal. 1M+ annual unique learners. 7,000+ institutions and organizations.",
+        {
+            "approved_numeric_claims": ["1M+", "7,000+"],
+            "default_public_stats": ["1M+ annual unique learners", "7,000+ institutions and organizations"],
+            "approved_named_proof": [],
+        },
+    )
+
+    assert report["status"] != "strong"
+    assert report["overall_score"] < 4.3
+
+
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
     monkeypatch.setattr(
         "app.grounding.load_grounding",

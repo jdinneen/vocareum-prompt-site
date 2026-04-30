@@ -960,7 +960,7 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
         if one_pager_flags and one_pager_flags["placeholder_proof"]:
             completeness_score = 2
         elif one_pager_flags and not one_pager_flags["has_named_proof"]:
-            completeness_score = 3
+            completeness_score = 2
             improvements.append("Use approved named public proof when available. If none exists, explicitly mark `Proof: None`.")
     elif req.asset_type == "reply-email":
         asks = 1
