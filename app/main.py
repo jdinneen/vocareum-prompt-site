@@ -685,6 +685,18 @@ def _detect_schedule_ask(text: str) -> bool:
     return any(term in lowered for term in ("meeting", "follow-up", "follow up", "schedule", "calendar", "time"))
 
 
+def _extract_labeled_sections(text: str, labels: list[str]) -> dict[str, str]:
+    label_clause = "|".join(re.escape(item) for item in labels)
+    sections: dict[str, str] = {}
+    for label in labels:
+        pattern = re.compile(
+            rf"(?ms)^{re.escape(label)}:?\s*(.*?)(?=^(?:{label_clause}):?\s*|\Z)"
+        )
+        match = pattern.search(text)
+        sections[label] = match.group(1).strip() if match else ""
+    return sections
+
+
 def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, truth_bundle: dict) -> dict:
     validation = validate_output(
         asset_type=req.asset_type,
@@ -728,11 +740,11 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     is_collateral = req.asset_type in {"sales-collateral", "one-pager", "sales-deck-brief"}
     workflow_score = 5 if has_subject or is_collateral else 2
     if req.asset_type == "one-pager":
-        required_labels = ["Headline:", "Subhead:", "Stat Bar:", "Problem:", "How It Works:", "Who Uses This:", "Proof:", "CTA:"]
-        # Accept "How It Works" without colon as well
-        present = sum(1 for label in required_labels if label in output or label.rstrip(":") + "\n" in output)
-        workflow_score = max(1, min(5, round(present * 5 / len(required_labels))))
-        if present >= len(required_labels) - 1:
+        required_sections = ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "CTA"]
+        sections = _extract_labeled_sections(output, required_sections)
+        present = sum(1 for label in required_sections if sections.get(label))
+        workflow_score = max(1, min(5, round(present * 5 / len(required_sections))))
+        if present == len(required_sections):
             strengths.append("One-pager structure is complete.")
         else:
             improvements.append("Complete all required one-pager sections.")
@@ -811,7 +823,8 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
 
 def _one_pager_missing_sections(text: str) -> list[str]:
     required = ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "CTA"]
-    return [s for s in required if s not in text]
+    sections = _extract_labeled_sections(text, required)
+    return [label for label in required if not sections.get(label)]
 
 
 def _generate_text(req: GenerateRequest, request_id: str) -> tuple[str, int]:

@@ -7,6 +7,7 @@ from app.main import (
     _build_user_prompt,
     _brief_needs_more_detail,
     _max_output_tokens,
+    _one_pager_missing_sections,
     _auto_quality_report,
     _post_process,
     _sanitize_proof_sections,
@@ -289,6 +290,21 @@ def test_one_pager_quality_uses_objective_context_and_cta():
 
     assert specificity["score"] >= 4
     assert actionability["score"] == 5
+
+
+def test_one_pager_missing_sections_flags_empty_section_body():
+    missing = _one_pager_missing_sections(
+        "Headline: Test\n"
+        "Subhead: Subhead\n"
+        "Stat Bar: 1M+::annual unique learners\n"
+        "Problem: Problem\n"
+        "How It Works:\n"
+        "Who Uses This: Coursera::for simulations\n"
+        "Proof: AWS Academy::supports governed learning\n"
+        "CTA: Schedule a review."
+    )
+
+    assert "How It Works" in missing
 
 
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
