@@ -156,7 +156,8 @@ def _output_format_instructions(req: GenerateRequest) -> str:
             "CTA: one clear next-step sentence\n\n"
             "Put each section label at the start of its own line followed by the content. "
             "Keep copy concise and scan-friendly. Use only grounded proof. "
-            "If the brief names a company, institution, or partner, keep that audience explicit in the Subhead and Who Uses This sections instead of broadening it into generic sectors."
+            "If the brief names a company, institution, or partner, keep that audience explicit in the Subhead and Who Uses This sections instead of broadening it into generic sectors. "
+            "When a named audience is provided, make the first Who Uses This entry begin with that exact audience name."
         )
     if req.asset_type == "sales-deck-brief":
         return (
@@ -414,6 +415,8 @@ def _build_user_prompt(req: GenerateRequest, correction_instructions: str = "") 
         mode_note = "Write directly for the requested workflow."
     if audience and req.asset_type in {"sales-collateral", "one-pager", "sales-deck-brief", "outbound-email"}:
         mode_note += f" Keep the named audience explicit in the output: {audience}. Do not replace it with broader generic categories unless the brief explicitly asks for that."
+    if audience and req.asset_type == "one-pager":
+        mode_note += f" In `Who Uses This`, the first entry must start with `{audience}`."
     example_section = f"\n\n{example_block}" if example_block else ""
     return f"""Create a grounded Vocareum deliverable.
 

@@ -164,6 +164,7 @@ def test_one_pager_prompt_keeps_inferred_audience_explicit(monkeypatch):
 
     assert "Audience: coursera" in prompt
     assert "Keep the named audience explicit in the output: coursera." in prompt
+    assert "the first entry must start with `coursera`" in prompt
 
 
 def test_reply_post_process_adds_missing_scheduling_response():
