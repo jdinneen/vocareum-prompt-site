@@ -308,6 +308,76 @@ def test_one_pager_missing_sections_flags_empty_section_body():
     assert "How It Works" in missing
 
 
+def test_one_pager_prompt_prefers_none_over_placeholder_proof(monkeypatch):
+    monkeypatch.setattr(
+        "app.grounding.load_grounding",
+        lambda: {
+            "source": {
+                "title": SOURCE_TITLE,
+                "last_reviewed": "2026-04-27",
+                "doc_url": "https://example.com/catalog",
+            },
+            "mode": "live",
+            "warnings": [],
+            "catalog_front_matter": "Catalog front matter",
+            "catalog_sections": {"Simulations": "Simulations grounded section"},
+            "email_sections": {},
+            "collateral_examples": {},
+            "truth_bundle": {
+                "default_public_stats": ["1M+ annual unique learners"],
+                "approved_named_proof": [],
+            },
+            "style_palette": {},
+        },
+    )
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="Simulations",
+        audience="Coursera",
+        objective="Build a one-pager for Simulations for Coursera.",
+    )
+
+    prompt = _build_user_prompt(req)
+
+    assert "If no approved named public proof exists, write 'None'." in prompt
+    assert "Do not use source metadata, review dates, catalog names, or workflow/category placeholders as proof." in prompt
+
+
+def test_one_pager_quality_penalizes_placeholder_proof_and_audience_drift():
+    req = GenerateRequest(
+        asset_type="one-pager",
+        product="Simulations",
+        audience="Coursera",
+        objective="Build a one-pager for Simulations for Coursera.",
+    )
+    output = (
+        "Headline: Simulations for Coursera Learners\n"
+        "Subhead: Give Coursera learners AI-generated environments for roleplay, judgment, and workflow rehearsal.\n"
+        "Stat Bar: 1M+ - annual unique learners | 7,000+ - institutions and organizations\n"
+        "Problem: Learners need safe, controlled environments to practice critical decisions and complex workflows.\n"
+        "How It Works: Generate scenarios | Practice judgment | Capture evidence\n"
+        "Who Uses This: Coursera product team | healthcare teams | business teams\n"
+        "Proof: April 2026 source docs - current workflow/category\n"
+        "Quote: None\n"
+        "CTA: Contact Vocareum to scope a pilot."
+    )
+    report = _auto_quality_report(
+        req,
+        output,
+        "Simulations provides AI-generated environments for roleplay, judgment, and workflow rehearsal. 1M+ annual unique learners. 7,000+ institutions and organizations.",
+        {
+            "approved_numeric_claims": ["1M+", "7,000+"],
+            "default_public_stats": ["1M+ annual unique learners", "7,000+ institutions and organizations"],
+            "approved_named_proof": [],
+        },
+    )
+
+    assert report["status"] != "strong"
+    assert report["overall_score"] < 4.3
+    assert any("placeholder proof" in item.lower() for item in report["blockers"])
+    assert any("named audience" in item.lower() for item in report["improvements"])
+
+
 def test_grounding_block_uses_catalog_title_and_truth_bundle(monkeypatch):
     monkeypatch.setattr(
         "app.grounding.load_grounding",

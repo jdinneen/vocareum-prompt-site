@@ -148,16 +148,18 @@ def _output_format_instructions(req: GenerateRequest) -> str:
             "Every section is REQUIRED — do not omit any.\n\n"
             "Headline: one strong value-proposition line\n"
             "Subhead: 1-2 sentences expanding the headline\n"
-            "Stat Bar: 3-4 items separated by semicolons as 'value: label' (e.g. '2M+: AWS learners')\n"
+            "Stat Bar: 3-4 entries separated by | in the format 'value - label' (e.g. '2M+ - AWS learners')\n"
             "Problem: 2-3 sentences on the pain point this solves\n"
-            "How It Works: 3-4 numbered steps (1. Title. Detail sentence.)\n"
-            "Who Uses This: comma-separated list of 3-5 buyer roles\n"
-            "Proof: 1-2 sentences of grounded paraphrased proof\n"
+            "How It Works: 3 short actions separated by |\n"
+            "Who Uses This: 1-3 audience entries separated by |\n"
+            "Proof: 1-3 approved named public proof entries separated by | in the format 'reference - signal'. If no approved named public proof exists, write 'None'.\n"
+            "Quote: one approved public quote, or 'None'\n"
             "CTA: one clear next-step sentence\n\n"
             "Put each section label at the start of its own line followed by the content. "
             "Keep copy concise and scan-friendly. Use only grounded proof. "
             "If the brief names a company, institution, or partner, keep that audience explicit in the Subhead and Who Uses This sections instead of broadening it into generic sectors. "
-            "When a named audience is provided, make the first Who Uses This entry begin with that exact audience name."
+            "When a named audience is provided, make the first Who Uses This entry begin with that exact audience name. "
+            "Do not use source metadata, review dates, catalog names, or workflow/category placeholders as proof."
         )
     if req.asset_type == "sales-deck-brief":
         return (
@@ -715,6 +717,82 @@ def _extract_labeled_sections(text: str, labels: list[str]) -> dict[str, str]:
     return sections
 
 
+ONE_PAGER_PLACEHOLDER_PROOF_PATTERNS = (
+    re.compile(r"\bsource docs?\b", re.IGNORECASE),
+    re.compile(r"\bproduct catalog\b", re.IGNORECASE),
+    re.compile(r"\bapproved catalog\b", re.IGNORECASE),
+    re.compile(r"\bworkflow\/category\b", re.IGNORECASE),
+    re.compile(r"\bworkflow category\b", re.IGNORECASE),
+    re.compile(r"\bgrounding\b", re.IGNORECASE),
+    re.compile(r"\blast reviewed\b", re.IGNORECASE),
+    re.compile(r"\bversion\b", re.IGNORECASE),
+)
+ONE_PAGER_AUDIENCE_STOPWORDS = {
+    "a", "an", "and", "audience", "audiences", "business", "buyer", "buyers",
+    "company", "companies", "context", "department", "departments", "director",
+    "directors", "enterprise", "for", "group", "groups", "industry", "leader",
+    "leaders", "of", "or", "product", "role", "roles", "target", "team",
+    "teams", "the", "title", "titles",
+}
+
+
+def _section_items(section_body: str) -> list[str]:
+    return [
+        item.strip()
+        for item in re.split(r"\|", section_body or "")
+        if item and item.strip()
+    ]
+
+
+def _none_like(value: str) -> bool:
+    normalized = re.sub(r"\s+", " ", value.strip().strip(".,:;()")).lower()
+    return normalized in {"none", "n/a", "not available", "not applicable", "no proof", "no quote"}
+
+
+def _meaningful_phrase_tokens(value: str) -> set[str]:
+    normalized = re.sub(r"\s+", " ", value.strip().lower())
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]{3,}", normalized)
+        if token not in ONE_PAGER_AUDIENCE_STOPWORDS
+    }
+
+
+def _proof_entry_is_placeholder(entry: str) -> bool:
+    if _none_like(entry):
+        return True
+    return any(pattern.search(entry) for pattern in ONE_PAGER_PLACEHOLDER_PROOF_PATTERNS)
+
+
+def _one_pager_quality_flags(req: GenerateRequest, output: str) -> dict:
+    sections = _extract_labeled_sections(
+        output,
+        ["Headline", "Subhead", "Stat Bar", "Problem", "How It Works", "Who Uses This", "Proof", "Quote", "CTA"],
+    )
+    proof_entries = [item for item in _section_items(sections.get("Proof", "")) if not _none_like(item)]
+    placeholder_proof = any(_proof_entry_is_placeholder(item) for item in proof_entries)
+    has_named_proof = bool(proof_entries) and not placeholder_proof
+
+    named_audience = _resolved_audience(req)
+    audience_entries = [item for item in _section_items(sections.get("Who Uses This", "")) if not _none_like(item)]
+    audience_drift = False
+    if named_audience and audience_entries:
+        target_tokens = _meaningful_phrase_tokens(named_audience)
+        if target_tokens:
+            overlapping = [
+                item for item in audience_entries
+                if _meaningful_phrase_tokens(item) & target_tokens
+            ]
+            audience_drift = bool(overlapping) and len(overlapping) < len(audience_entries)
+
+    return {
+        "sections": sections,
+        "has_named_proof": has_named_proof,
+        "placeholder_proof": placeholder_proof,
+        "audience_drift": audience_drift,
+    }
+
+
 def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, truth_bundle: dict) -> dict:
     validation = validate_output(
         asset_type=req.asset_type,
@@ -735,6 +813,12 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
         blockers.extend(issue.detail for issue in validation.issues[:4])
         improvements.append("Tighten unsupported claims and proof references.")
     scores.append({"id": "grounding", "label": "Grounding safety", "score": grounding_score})
+    one_pager_flags = _one_pager_quality_flags(req, output) if req.asset_type == "one-pager" else None
+    if one_pager_flags and one_pager_flags["placeholder_proof"]:
+        grounding_score = min(grounding_score, 3)
+        scores[-1]["score"] = grounding_score
+        blockers.append("One-pager uses placeholder proof instead of approved named public proof.")
+        improvements.append("Replace placeholder proof with approved named proof, or use `Proof: None`.")
 
     if req.asset_type == "grounded-answer":
         specificity_score, _signals = _specificity_score(req, output)
@@ -766,6 +850,9 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
             strengths.append("One-pager structure is complete.")
         else:
             improvements.append("Complete all required one-pager sections.")
+        if one_pager_flags and one_pager_flags["placeholder_proof"]:
+            workflow_score = min(workflow_score, 3)
+            strengths = [item for item in strengths if item != "One-pager structure is complete."]
     elif req.asset_type == "sales-deck-brief":
         slide_count = len(re.findall(r"(?m)^Slide\s+\d+:", output))
         workflow_score = 5 if slide_count == 6 else max(1, min(5, slide_count))
@@ -789,10 +876,14 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     scores.append({"id": "workflow", "label": "Workflow fit", "score": workflow_score})
 
     specificity_score, _signals = _specificity_score(req, output)
+    if one_pager_flags and one_pager_flags["audience_drift"]:
+        specificity_score = max(1, specificity_score - 2)
     if specificity_score >= 4:
         strengths.append("Output is specific to the requested product or audience.")
     else:
         improvements.append("Make the output more specific to the named person, audience, or product.")
+    if one_pager_flags and one_pager_flags["audience_drift"]:
+        improvements.append("Keep `Who Uses This` anchored to the named audience instead of broadening into generic sectors.")
     scores.append({"id": "specificity", "label": "Specificity", "score": specificity_score})
 
     actionability_score = 3
@@ -815,7 +906,14 @@ def _auto_quality_report(req: GenerateRequest, output: str, support_text: str, t
     scores.append({"id": "actionability", "label": "Actionability", "score": actionability_score})
 
     completeness_score = 4
-    if req.asset_type == "reply-email":
+    if req.asset_type == "one-pager":
+        completeness_score = 5
+        if one_pager_flags and one_pager_flags["placeholder_proof"]:
+            completeness_score = 2
+        elif one_pager_flags and not one_pager_flags["has_named_proof"]:
+            completeness_score = 3
+            improvements.append("Use approved named public proof when available. If none exists, explicitly mark `Proof: None`.")
+    elif req.asset_type == "reply-email":
         asks = 1
         if _detect_schedule_ask(req.objective):
             asks += 1
@@ -863,6 +961,8 @@ def _critic_review_and_select(
         critic_notes.append(f"Keep `{audience}` explicit as the named audience.")
     if product:
         critic_notes.append(f"Keep `{product}` explicit as the named product surface.")
+    critic_notes.append("If there is no approved named public proof, write `Proof: None` instead of using source metadata or placeholders.")
+    critic_notes.append("Do not invent extra sectors, departments, or buyer groups when the brief only names one audience.")
     missing_sections = _one_pager_missing_sections(current_text)
     if missing_sections:
         critic_notes.append("Fill every missing or empty labeled section: " + ", ".join(missing_sections) + ".")
